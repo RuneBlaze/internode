@@ -1,4 +1,3 @@
-
 #![allow(non_upper_case_globals)]
 #![allow(non_camel_case_types)]
 #![allow(non_snake_case)]
@@ -76,18 +75,21 @@ pub struct Tree {
 pub fn run_fastme(taxon_set : &TaxonSet, dm : &Array<f64, Ix2>) -> String {
     let size = taxon_set.len() as i32;
     unsafe {
+        // println!("size {}", size);
+        // println!("initializing double matrix");
         let mut A = initDoubleMatrix(2*size-2);
         let mut D = initDoubleMatrix(2*size-2);
-        fillZeroMatrix(&mut A as *mut *mut *mut f64, 2 * size - 2);
+        fillZeroMatrix(&mut A as *mut *mut *mut f64, 2 * size-2);
         for i in 0..size {
             let ptr = D.offset(i as isize);
             *ptr = mCalloc(size, size_of::<f64>() as u64) as *mut f64;
         }
-
         for i in 0..size {
             for j in 0..size {
-                let ptr = D.offset(i as isize).offset(j as isize);
-                **ptr = dm[[i as usize, j as usize]];
+                let row = D.offset(i as isize);
+                let r2 = *row;
+                let ptr = r2.offset(j as isize);
+                *ptr = dm[[i as usize, j as usize]];
             }
         }
 
@@ -113,10 +115,9 @@ pub fn run_fastme(taxon_set : &TaxonSet, dm : &Array<f64, Ix2>) -> String {
         let mut nniCount : i32 = 0;
         let mut sprCount : i32 = 0;
         t = ImproveTree(&mut options, t, D, A, &mut nniCount, &mut sprCount, options.fpO_stat_file);
-        let mut tree_output = Vec::<u8>::with_capacity((size << 10) as usize);
-        tree_output[0] = 0;
+        let mut tree_output = vec![0u8; (size << 10) as usize]; //Vec::<u8>::with_capacity((size << 10) as usize);
         NewickPrintTreeStr(t, tree_output.as_mut_ptr() as *mut i8, 2);
-        let result = CString::from_vec_with_nul(tree_output).unwrap();
+        let result = CString::from_vec_unchecked(tree_output);
         return result.to_str().unwrap().to_owned();
     }
 }

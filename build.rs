@@ -1,12 +1,40 @@
 extern crate bindgen;
-
+extern crate cc;
 use std::env;
 use std::path::PathBuf;
 
 fn main() {
+    cc::Build::new()
+    // .files("third_party/fastme/")
+    .file("third_party/fastme/BIONJ.c")
+.file("third_party/fastme/MVR.c")
+.file("third_party/fastme/NNI.c")
+.file("third_party/fastme/SPR.c")
+.file("third_party/fastme/bNNI.c")
+.file("third_party/fastme/bme.c")
+.file("third_party/fastme/distance.c")
+.file("third_party/fastme/fastme.c")
+.file("third_party/fastme/gme.c")
+.file("third_party/fastme/graph.c")
+.file("third_party/fastme/heap.c")
+.file("third_party/fastme/inputs.c")
+.file("third_party/fastme/interface_options.c")
+.file("third_party/fastme/interface_utilities.c")
+.file("third_party/fastme/newick.c")
+.file("third_party/fastme/p_bootstrap.c")
+.file("third_party/fastme/p_eigen.c")
+.file("third_party/fastme/p_lk.c")
+.file("third_party/fastme/p_models.c")
+.file("third_party/fastme/p_optimiz.c")
+.file("third_party/fastme/p_utils.c")
+.file("third_party/fastme/random.c")
+.file("third_party/fastme/traverse.c")
+.file("third_party/fastme/utils.c")
+        .compile("fastme");
+    println!("cargo:rustc-link-search=native=third_party/fastme/");
+    println!("cargo:rustc-link-lib=fastme");
     // Tell cargo to invalidate the built crate whenever the wrapper changes
     println!("cargo:rerun-if-changed=wrapper.h");
-
     // The bindgen::Builder is the main entry point
     // to bindgen, and lets you build up options for
     // the resulting bindings.

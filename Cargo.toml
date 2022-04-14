@@ -10,3 +10,4 @@ ndarray = "0.15.0"
 
 [build-dependencies]
 bindgen = "0.59.2"
+cc = "1.0.73"
