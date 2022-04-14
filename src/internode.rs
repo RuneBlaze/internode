@@ -7,8 +7,12 @@ use std::{collections::HashMap, borrow::Borrow, cmp::max};
 use std::mem::{size_of};
 use std::ptr;
 use std::ffi::CString;
+use std::collections::{VecDeque};
 use ndarray::Array;
 use ndarray::prelude::*;
+use std::fs::File;
+use std::io::{self, BufRead};
+use std::path::Path;
 
 include!(concat!(env!("OUT_DIR"), "/bindings.rs"));
 
@@ -18,6 +22,13 @@ pub struct TaxonSet {
     pub names : Vec<String>,
     last : usize,
 }
+// The output is wrapped in a Result to allow matching on errors
+// Returns an Iterator to the Reader of the lines of the file.
+fn read_lines<P>(filename: P) -> io::Result<io::Lines<io::BufReader<File>>>
+where P: AsRef<Path>, {
+    let file = File::open(filename)?;
+    Ok(io::BufReader::new(file).lines())
+}
 
 impl TaxonSet {
     pub fn request(&mut self, taxon_name : String) -> usize {
@@ -26,6 +37,10 @@ impl TaxonSet {
             self.last += 1;
             self.last - 1
         }).clone()
+    }
+
+    pub fn retreive(&self, taxon_name : String) -> usize {
+        self.to_id.get(&taxon_name).unwrap().clone()
     }
 
     pub fn new() -> Self {
@@ -38,6 +53,73 @@ impl TaxonSet {
 
     pub fn len(&self) -> usize {
         self.last
+    }
+}
+
+#[derive(Debug)]
+pub struct UstarState {
+    pub dm : Array<f64, Ix2>,
+    pub mask : Array<f64, Ix2>,
+    pub dim : usize,
+}
+
+impl UstarState {
+    pub fn from_taxon_set(taxon_set : &TaxonSet) -> Self {
+        let n = taxon_set.len();
+        let dm = Array::<f64, _>::zeros((n, n).f());
+        let mask = Array::<f64, _>::zeros((n, n).f());
+        UstarState {
+            dm,
+            mask,
+            dim : n,
+        }
+    }
+}
+
+pub fn add_to_matrix(state : &mut UstarState, tree : &Tree) {
+    // a straightforward translation of the treeswift logic
+    // sparse vector of distances
+    let mut leaf_dists = HashMap::<usize, Vec<(usize, f64)>>::new();
+    for node in tree.postorder() {
+        if tree.is_leaf(node) {
+            leaf_dists.insert(node, vec![(node, 0.0)]);
+        } else {
+            let mut calculated_root = false;
+            for c in tree.children(node) {
+                if tree.is_root(node) && tree.fake_root {
+                    if calculated_root {
+                        continue;
+                    }
+                    calculated_root = true;
+                }
+                for e in leaf_dists.get_mut(&c).unwrap() {
+                    e.1 += tree.lengths[c];
+                }
+            }
+
+            let node_children : Vec<usize> = tree.children(node).collect();
+            for c1 in 0..(node_children.len() - 1) {
+                let leaves_c1 = leaf_dists.get(&node_children[c1]).unwrap();
+                for c2 in (c1+1)..(node_children.len()) {
+                    let leaves_c2 = leaf_dists.get(&node_children[c2]).unwrap();
+                    for i in 0..(leaves_c1.len()) {
+                        for j in 0..(leaves_c2.len()) {
+                            let (u, ud) = leaves_c1[i];
+                            let (v, vd) = leaves_c2[j];
+                            let dist = ud + vd;
+                            let u_leaf = tree.taxa[u] as usize;
+                            let v_leaf = tree.taxa[v] as usize;
+                            state.dm[[u_leaf, v_leaf]] += dist;
+                            state.dm[[v_leaf, u_leaf]] += dist;
+                            state.mask[[u_leaf, v_leaf]] += 1.0;
+                            state.mask[[v_leaf, u_leaf]] += 1.0;
+                        }
+                    }
+                }
+            }
+            // let v = &*leaf_dists.get(&(tree.firstchild[node] as usize)).unwrap();
+            // leaf_dists.insert(node, v.clone());
+        }
     }
 }
 
@@ -55,8 +137,25 @@ impl TreeCollection {
         }
     }
 
-    pub fn from_newick() -> Self {
-        unimplemented!()
+    pub fn from_newick<P>(filename : P) -> Result<Self, &'static str> where P : AsRef<Path> {
+        let mut trees : Vec<Tree> = vec![];
+        let mut taxon_set = TaxonSet::new();
+        if let Ok(lines) = read_lines(filename) {
+            for line in lines {
+                if let Ok(newick) = line {
+                    let parsed = parse_newick(&mut taxon_set, newick.as_str());
+                    trees.push(parsed);
+                } else {
+                    return Err("Error reading file");
+                }
+            }
+            return Ok(TreeCollection {
+                taxon_set,
+                trees,
+            });
+        } else {
+            return Err("Could not read file");
+        }
     }
 }
 
@@ -72,11 +171,87 @@ pub struct Tree {
     pub fake_root : bool,
 }
 
+impl Tree {
+    pub fn children(&self, node : usize) -> ChildrenIterator {
+        ChildrenIterator::new(self, node)
+    }
+    
+    pub fn postorder(&self) -> PostorderIterator {
+        PostorderIterator::new(self)
+    }
+
+    pub fn is_leaf(&self, node : usize) -> bool {
+        if self.childcount[node] == 0 {
+            return true;
+        }
+        false
+    }
+
+    pub fn is_root(&self, node : usize) -> bool {
+        return node == 0;
+    }
+ }
+
+pub struct PostorderIterator {
+    // s1 : Vec<usize>,
+    s2 : Vec<usize>,
+}
+
+pub struct ChildrenIterator<'a> {
+    tree : &'a Tree,
+    current : i32,
+}
+
+impl<'a> ChildrenIterator<'a> {
+    pub fn new(tree : &'a Tree, node : usize) -> Self {
+        ChildrenIterator {
+            tree : tree,
+            current : tree.firstchild[node],
+        }
+    }
+}
+
+impl<'a> Iterator for ChildrenIterator<'a> {
+    type Item = usize;
+
+    fn next(&mut self) -> Option<Self::Item> {
+        if self.current == -1 {
+            None
+        } else {
+            let res = self.current as usize;
+            self.current = self.tree.nextsib[self.current as usize];
+            Some(res)
+        }
+    }
+}
+
+impl PostorderIterator {
+    pub fn new(tree: &Tree) -> Self {
+        let mut s1 = Vec::new();
+        let mut s2 = Vec::new();
+        s1.push(0usize);
+        while let Some(n) = s1.pop() {
+            s2.push(n);
+            tree.children(n).for_each(|c| s1.push(c));
+        }
+        PostorderIterator {
+            // s1,
+            s2,
+        }
+    }
+}
+
+impl Iterator for PostorderIterator {
+    type Item = usize;
+
+    fn next(&mut self) -> Option<Self::Item> {
+        self.s2.pop()
+    }
+}
+
 pub fn run_fastme(taxon_set : &TaxonSet, dm : &Array<f64, Ix2>) -> String {
     let size = taxon_set.len() as i32;
     unsafe {
-        // println!("size {}", size);
-        // println!("initializing double matrix");
         let mut A = initDoubleMatrix(2*size-2);
         let mut D = initDoubleMatrix(2*size-2);
         fillZeroMatrix(&mut A as *mut *mut *mut f64, 2 * size-2);
@@ -220,8 +395,17 @@ pub fn parse_newick(taxon_set: &mut TaxonSet, newick: &str) -> Tree {
 #[cfg(test)]
 mod tests {
     use super::*;
-    
- 
+    use std::path::PathBuf;
+
+    #[test]
+    fn test_read_tree_collection() {
+        let mut d = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
+        d.push("resources/test");
+        d.push("avian.tre");
+        let trees = TreeCollection::from_newick(d).unwrap();
+        assert_eq!(48, trees.taxon_set.len());
+        assert_eq!(100, trees.trees.len());
+    }
 }
 
 fn main() {
