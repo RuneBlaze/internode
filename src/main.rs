@@ -30,12 +30,15 @@ struct Args {
     #[clap(short, long, arg_enum, default_value_t = Mode::Support)]
     mode : Mode,
     #[clap(short = 'x', long, default_value_t = 1.0)]
-    max_support : f64
+    max_support : f64,
+    #[clap(short, long, default_value_t = 0.0)]
+    normalizer : f64,
 }
 
 fn args_to_config(args : &Args) -> UstarConfig {
     UstarConfig {
         max_support: args.max_support,
+        normalizer: args.normalizer,
         mode: args.mode,
     }
 }

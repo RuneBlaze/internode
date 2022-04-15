@@ -17,6 +17,9 @@ tree, when unspecified, goes to `STDOUT`.
 
 `mode` defaults to `support`, which sums up the internode support. Set it to `internode` for an emulation of the original ASTRID's behavior. If your support values are upper-bounded by somthing greater than 1 (say, if you have bootstrap support in the values between 0 and 100), then the `-x` option needs to be specified to be the upper-bound (`-x 100`).
 
+Likewise, if some support value should mean "no information" (AFAIK, aBayes from IQTree),
+it should be specified as such via `-n`, for example `-n 0.333`. This way the support values are normalized from `[0.333, 1]` to `[0, 1]`. These options names are borrowed from weighted ASTRAL.
+
 ## Examples
 
 Emulation of ASTRID: output is printed to STDOUT
@@ -25,11 +28,11 @@ Emulation of ASTRID: output is printed to STDOUT
 wastrid -i gtrees.tre -m internode
 ```
 
-Weighted ASTRID by support: output is written to a file
+Weighted ASTRID by support on IQTree aBayes support: output is written to a file
 specified by the full-path `species.tre`
 
 ```bash
-wastrid -i gtrees.tre -m support -o species.tre
+wastrid -i gtrees.tre -n 0.333 -m support -o species.tre
 ```
 
 ## Missing features

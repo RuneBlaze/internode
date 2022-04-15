@@ -14,3 +14,6 @@ cc = "1.0.73"
 [[bin]]
 name = "wastrid"
 path = "src/main.rs"
+
+[profile.release]
+lto = "thin"
