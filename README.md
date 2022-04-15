@@ -59,4 +59,10 @@ Summary
 
 ## Acknowledgements
 
-This code contains translated parts from [ASTRID-2](https://github.com/pranjalv123/ASTRID) and [TreeSwift](https://github.com/niemasd/TreeSwift).
+The code contains translated parts from [ASTRID-2](https://github.com/pranjalv123/ASTRID) and [TreeSwift](https://github.com/niemasd/TreeSwift). Due to ASTRID-2's GPLv2 license, this project is also
+licensed as GPLv2.
+
+FastME (residing in `third_party`) is derived from its
+[original source code](https://gite.lirmm.fr/atgc/FastME/), and
+of course, does not fall into the GPL licensing part of this project. I do not know a proper software license of FastME, so if this project
+results in some violation please let me know.
