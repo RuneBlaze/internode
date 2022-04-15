@@ -13,7 +13,7 @@ use ndarray::prelude::*;
 use std::fs::File;
 use std::io::{self, BufRead};
 use std::path::Path;
-
+use clap::{ArgEnum};
 include!(concat!(env!("OUT_DIR"), "/bindings.rs"));
 
 #[derive(Debug)]
@@ -61,6 +61,29 @@ pub struct UstarState {
     pub dm : Array<f64, Ix2>,
     pub mask : Array<f64, Ix2>,
     pub dim : usize,
+    pub minted : bool,
+}
+
+#[derive(Copy, Clone, PartialEq, Eq, PartialOrd, Ord, ArgEnum, Debug)]
+pub enum Mode {
+    Support,
+    Internode,
+    RLength,
+}
+
+
+pub struct UstarConfig {
+    pub max_support : f64,
+    pub mode : Mode,
+}
+
+impl Default for UstarConfig {
+    fn default() -> Self {
+        UstarConfig {
+            max_support : 1.0,
+            mode : Mode::Support,
+        }
+    }
 }
 
 impl UstarState {
@@ -72,17 +95,47 @@ impl UstarState {
             dm,
             mask,
             dim : n,
+            minted: false,
         }
+    }
+
+    pub fn from_tree_collection(tree_collection : &TreeCollection, config : &UstarConfig) -> Self {
+        let mut state = UstarState::from_taxon_set(&tree_collection.taxon_set);
+        for t in &tree_collection.trees {
+            add_to_matrix(&mut state, t, config.mode);
+        }
+        return state;
+    }
+
+    pub fn flatten(&mut self) {
+        for i in 0..self.dim {
+            for j in (i+1)..self.dim {
+                self.dm[[i, j]] /= self.mask[[i, j]];
+            }
+        }
+        self.minted = true;
+    }
+
+    pub fn raw_tree(&mut self, taxon_set : &TaxonSet) -> String {
+        run_fastme(taxon_set, &self.dm)
+    }
+
+    pub fn to_tree(&mut self, taxon_set : &TaxonSet) -> String {
+        if !self.minted {
+            self.flatten();
+        }
+        self.raw_tree(taxon_set)
     }
 }
 
-pub fn add_to_matrix(state : &mut UstarState, tree : &Tree) {
+pub fn add_to_matrix(state : &mut UstarState, tree : &Tree, mode : Mode) {
     // a straightforward translation of the treeswift logic
     // sparse vector of distances
-    let mut leaf_dists = HashMap::<usize, Vec<(usize, f64)>>::new();
+    let mut leaf_dists = Vec::<Vec<(usize, f64)>>::new();
+    leaf_dists.resize(tree.taxa.len(), Vec::new());
     for node in tree.postorder() {
         if tree.is_leaf(node) {
-            leaf_dists.insert(node, vec![(node, 0.0)]);
+            leaf_dists[node].push((node, 0.0));
         } else {
             let mut calculated_root = false;
             for c in tree.children(node) {
@@ -92,16 +145,20 @@ pub fn add_to_matrix(state : &mut UstarState, tree : &Tree) {
                     }
                     calculated_root = true;
                 }
-                for e in leaf_dists.get_mut(&c).unwrap() {
-                    e.1 += tree.lengths[c];
+                for e in leaf_dists.get_mut(c).unwrap() {
+                    e.1 += match mode {
+                        Mode::Support => tree.support[c],
+                        Mode::Internode => 1.0,
+                        Mode::RLength => tree.lengths[c],
+                    };
                 }
             }
 
             let node_children : Vec<usize> = tree.children(node).collect();
             for c1 in 0..(node_children.len() - 1) {
-                let leaves_c1 = leaf_dists.get(&node_children[c1]).unwrap();
+                let leaves_c1 = leaf_dists.get(node_children[c1]).unwrap();
                 for c2 in (c1+1)..(node_children.len()) {
-                    let leaves_c2 = leaf_dists.get(&node_children[c2]).unwrap();
+                    let leaves_c2 = leaf_dists.get(node_children[c2]).unwrap();
                     for i in 0..(leaves_c1.len()) {
                         for j in 0..(leaves_c2.len()) {
                             let (u, ud) = leaves_c1[i];
@@ -109,12 +166,22 @@ pub fn add_to_matrix(state : &mut UstarState, tree : &Tree) {
                             let dist = ud + vd;
                             let u_leaf = tree.taxa[u] as usize;
                             let v_leaf = tree.taxa[v] as usize;
-                            state.dm[[u_leaf, v_leaf]] += dist;
-                            state.dm[[v_leaf, u_leaf]] += dist;
-                            state.mask[[u_leaf, v_leaf]] += 1.0;
-                            state.mask[[v_leaf, u_leaf]] += 1.0;
+                            let l = std::cmp::min(u_leaf, v_leaf);
+                            let r = std::cmp::max(u_leaf, v_leaf);
+                            state.dm[[l, r]] += dist;
+                            state.mask[[l, r]] += 1.0;
                         }
                     }
+                }
+            }
+            
+            for (i, e) in tree.children(node).enumerate() {
+                if i == 0 {
+                    leaf_dists.swap(node, tree.firstchild[node] as usize);
+                } else {
+                    leaf_dists.push(vec![]);
+                    let mut v = leaf_dists.swap_remove(e);
+                    leaf_dists[node].append(&mut v);
                 }
             }
             // let v = &*leaf_dists.get(&(tree.firstchild[node] as usize)).unwrap();
@@ -137,13 +204,13 @@ impl TreeCollection {
         }
     }
 
-    pub fn from_newick<P>(filename : P) -> Result<Self, &'static str> where P : AsRef<Path> {
+    pub fn from_newick<P>(filename : P, config : &UstarConfig) -> Result<Self, &'static str> where P : AsRef<Path> {
         let mut trees : Vec<Tree> = vec![];
         let mut taxon_set = TaxonSet::new();
         if let Ok(lines) = read_lines(filename) {
             for line in lines {
                 if let Ok(newick) = line {
-                    let parsed = parse_newick(&mut taxon_set, newick.as_str());
+                    let parsed = parse_newick(&mut taxon_set, newick.as_str(), config);
                     trees.push(parsed);
                 } else {
                     return Err("Error reading file");
@@ -260,11 +327,17 @@ pub fn run_fastme(taxon_set : &TaxonSet, dm : &Array<f64, Ix2>) -> String {
             *ptr = mCalloc(size, size_of::<f64>() as u64) as *mut f64;
         }
         for i in 0..size {
-            for j in 0..size {
-                let row = D.offset(i as isize);
-                let r2 = *row;
-                let ptr = r2.offset(j as isize);
-                *ptr = dm[[i as usize, j as usize]];
+            for j in (i+1)..size {
+                // let row = D.offset(i as isize);
+                // let r2 = *row;
+                // let ptr = r2.offset(j as isize);
+
+                let r1 = (*(D.offset(i as isize))).offset(j as isize);
+                let r2 = (*(D.offset(j as isize))).offset(i as isize);
+                let l = i as usize;
+                let r = j as usize;
+                *r1 = dm[[l, r]];
+                *r2 = dm[[l, r]];
             }
         }
 
@@ -293,11 +366,64 @@ pub fn run_fastme(taxon_set : &TaxonSet, dm : &Array<f64, Ix2>) -> String {
         let mut tree_output = vec![0u8; (size << 10) as usize]; //Vec::<u8>::with_capacity((size << 10) as usize);
         NewickPrintTreeStr(t, tree_output.as_mut_ptr() as *mut i8, 2);
         let result = CString::from_vec_unchecked(tree_output);
-        return result.to_str().unwrap().to_owned();
+        let s = result.to_str().unwrap().to_owned();
+        return translate_newick(taxon_set, &s);
     }
 }
 
-pub fn parse_newick(taxon_set: &mut TaxonSet, newick: &str) -> Tree {
+pub fn translate_newick(taxon_set: &TaxonSet, newick: &str) -> String {
+    let mut buf = String::new();
+    let mut chars = newick.chars().fuse().peekable();
+    while let Some(c) = chars.next() {
+        if c == ';' {
+            buf.push(';');
+            break;
+        } else if c == '(' {
+            buf.push('(');
+        } else if c == ')' {
+            buf.push(')');
+        } else if c == ',' {
+            buf.push(',');
+        } else if c == ':' {
+            let mut ls  = "".to_string();
+            loop {
+                match chars.peek() {
+                    Some(',') | Some(')') | Some(';') | Some('[') | None => {
+                        break;
+                    },
+                    Some(_) => {
+                        ls.push(chars.next().unwrap());
+                    }
+                }
+            }
+            if ls.len() > 0 {
+                buf.push(':');
+                buf.push_str(&ls);
+            }
+        } else {
+            let mut ts = c.to_string();
+            loop {
+                match chars.peek() {
+                    Some(':') | Some(',') | Some(')') | Some(';') | Some('[') | None => {
+                        break;
+                    },
+                    Some(_) => {
+                        ts.push(chars.next().unwrap());
+                    }
+                }
+            }
+            if !buf.ends_with(")") {
+                let leaf_ix = ts.parse::<usize>().unwrap();
+                buf.push_str(&taxon_set.names[leaf_ix]);
+            } else {
+                buf.push_str(&ts);
+            }
+        }
+    }
+    return buf;
+}
+
+pub fn parse_newick(taxon_set: &mut TaxonSet, newick: &str, config : &UstarConfig) -> Tree {
     let mut taxa : Vec<i32> = vec![-42];
     let mut parents : Vec<i32> = vec![0];
     let mut support : Vec<f64> = vec![-1.0];
@@ -308,7 +434,6 @@ pub fn parse_newick(taxon_set: &mut TaxonSet, newick: &str) -> Tree {
     // we just reuse TreeSwift's logic
     let mut n : usize = 0; // the current node
     let mut chars = newick.chars().fuse().peekable();
-    // let mut parse_length = false;
     while let Some(c) = chars.next() {
         if c == ';' {
             break;
@@ -368,7 +493,7 @@ pub fn parse_newick(taxon_set: &mut TaxonSet, newick: &str) -> Tree {
                 taxa[n] = taxon_set.request(ts) as i32;
                 support[n] = 1.0;
             } else {
-                support[n] = ts.parse::<f64>().unwrap();
+                support[n] = ts.parse::<f64>().unwrap() / config.max_support;
             }
         }
     }
@@ -393,18 +518,29 @@ pub fn parse_newick(taxon_set: &mut TaxonSet, newick: &str) -> Tree {
 }
 
 #[cfg(test)]
-mod tests {
+pub mod tests {
     use super::*;
     use std::path::PathBuf;
 
-    #[test]
-    fn test_read_tree_collection() {
+    pub fn avian_tree() -> PathBuf {
         let mut d = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
         d.push("resources/test");
         d.push("avian.tre");
-        let trees = TreeCollection::from_newick(d).unwrap();
+        d
+    }
+
+    #[test]
+    fn test_read_tree_collection() {
+        let trees = TreeCollection::from_newick(avian_tree()).unwrap();
         assert_eq!(48, trees.taxon_set.len());
         assert_eq!(100, trees.trees.len());
+    }
+
+    #[test]
+    fn test_ustar_state_from_collection() {
+        let trees = TreeCollection::from_newick(avian_tree(), &UstarConfig::default()).unwrap();
+        let ustar = UstarState::from_tree_collection(&trees,&UstarConfig::default());
+        assert!(!ustar.mask.is_empty());
     }
 }
 
