@@ -531,7 +531,7 @@ pub mod tests {
 
     #[test]
     fn test_read_tree_collection() {
-        let trees = TreeCollection::from_newick(avian_tree()).unwrap();
+        let trees = TreeCollection::from_newick(avian_tree(),&UstarConfig::default()).unwrap();
         assert_eq!(48, trees.taxon_set.len());
         assert_eq!(100, trees.trees.len());
     }
