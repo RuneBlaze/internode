@@ -1,7 +1,7 @@
 mod internode;
+use clap::Parser;
 use internode::*;
 use std::fs;
-use clap::Parser;
 // use internode::tests::avian_tree;
 use ndarray::prelude::*;
 use std::path::PathBuf;
@@ -24,18 +24,18 @@ pub fn trivial_tree() -> PathBuf {
 #[clap(author, version, about, long_about = None)]
 struct Args {
     #[clap(short, long)]
-    input : PathBuf,
+    input: PathBuf,
     #[clap(short, long)]
-    output : Option<PathBuf>,
+    output: Option<PathBuf>,
     #[clap(short, long, arg_enum, default_value_t = Mode::Support)]
-    mode : Mode,
+    mode: Mode,
     #[clap(short = 'x', long, default_value_t = 1.0)]
-    max_support : f64,
+    max_support: f64,
     #[clap(short, long, default_value_t = 0.0)]
-    normalizer : f64,
+    normalizer: f64,
 }
 
-fn args_to_config(args : &Args) -> UstarConfig {
+fn args_to_config(args: &Args) -> UstarConfig {
     UstarConfig {
         max_support: args.max_support,
         normalizer: args.normalizer,

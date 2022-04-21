@@ -3,51 +3,56 @@
 #![allow(non_snake_case)]
 #![allow(dead_code)]
 
-use std::{collections::HashMap, borrow::Borrow, cmp::max};
-use std::mem::{size_of};
-use std::ptr;
-use std::ffi::CString;
-use std::collections::{VecDeque};
-use ndarray::Array;
+use clap::ArgEnum;
 use ndarray::prelude::*;
+use ndarray::Array;
+use std::collections::VecDeque;
+use std::ffi::CString;
 use std::fs::File;
 use std::io::{self, BufRead};
+use std::mem::size_of;
 use std::path::Path;
-use clap::{ArgEnum};
+use std::ptr;
+use std::{borrow::Borrow, cmp::max, collections::HashMap};
 include!(concat!(env!("OUT_DIR"), "/bindings.rs"));
 
 #[derive(Debug)]
 pub struct TaxonSet {
-    pub to_id : HashMap<String, usize>,
-    pub names : Vec<String>,
-    last : usize,
+    pub to_id: HashMap<String, usize>,
+    pub names: Vec<String>,
+    last: usize,
 }
 // The output is wrapped in a Result to allow matching on errors
 // Returns an Iterator to the Reader of the lines of the file.
 fn read_lines<P>(filename: P) -> io::Result<io::Lines<io::BufReader<File>>>
-where P: AsRef<Path>, {
+where
+    P: AsRef<Path>,
+{
     let file = File::open(filename)?;
     Ok(io::BufReader::new(file).lines())
 }
 
 impl TaxonSet {
-    pub fn request(&mut self, taxon_name : String) -> usize {
-        self.to_id.entry(taxon_name.clone()).or_insert_with(|| {
-            self.names.push(taxon_name);
-            self.last += 1;
-            self.last - 1
-        }).clone()
+    pub fn request(&mut self, taxon_name: String) -> usize {
+        self.to_id
+            .entry(taxon_name.clone())
+            .or_insert_with(|| {
+                self.names.push(taxon_name);
+                self.last += 1;
+                self.last - 1
+            })
+            .clone()
     }
 
-    pub fn retreive(&self, taxon_name : String) -> usize {
+    pub fn retreive(&self, taxon_name: String) -> usize {
         self.to_id.get(&taxon_name).unwrap().clone()
     }
 
     pub fn new() -> Self {
         TaxonSet {
-            to_id : HashMap::new(),
-            names : Vec::new(),
-            last : 0,
+            to_id: HashMap::new(),
+            names: Vec::new(),
+            last: 0,
         }
     }
 
@@ -58,10 +63,10 @@ impl TaxonSet {
 
 #[derive(Debug)]
 pub struct UstarState {
-    pub dm : Array<f64, Ix2>,
-    pub mask : Array<f64, Ix2>,
-    pub dim : usize,
-    pub minted : bool,
+    pub dm: Array<f64, Ix2>,
+    pub mask: Array<f64, Ix2>,
+    pub dim: usize,
+    pub minted: bool,
 }
 
 #[derive(Copy, Clone, PartialEq, Eq, PartialOrd, Ord, ArgEnum, Debug)]
@@ -71,37 +76,36 @@ pub enum Mode {
     RLength,
 }
 
-
 pub struct UstarConfig {
-    pub max_support : f64,
-    pub normalizer : f64,
-    pub mode : Mode,
+    pub max_support: f64,
+    pub normalizer: f64,
+    pub mode: Mode,
 }
 
 impl Default for UstarConfig {
     fn default() -> Self {
         UstarConfig {
-            max_support : 1.0,
-            normalizer : 0.0,
-            mode : Mode::Support,
+            max_support: 1.0,
+            normalizer: 0.0,
+            mode: Mode::Support,
         }
     }
 }
 
 impl UstarState {
-    pub fn from_taxon_set(taxon_set : &TaxonSet) -> Self {
+    pub fn from_taxon_set(taxon_set: &TaxonSet) -> Self {
         let n = taxon_set.len();
         let dm = Array::<f64, _>::zeros((n, n).f());
         let mask = Array::<f64, _>::zeros((n, n).f());
         UstarState {
             dm,
             mask,
-            dim : n,
+            dim: n,
             minted: false,
         }
     }
 
-    pub fn from_tree_collection(tree_collection : &TreeCollection, config : &UstarConfig) -> Self {
+    pub fn from_tree_collection(tree_collection: &TreeCollection, config: &UstarConfig) -> Self {
         let mut state = UstarState::from_taxon_set(&tree_collection.taxon_set);
         for t in &tree_collection.trees {
             add_to_matrix(&mut state, t, config.mode);
@@ -111,18 +115,18 @@ impl UstarState {
 
     pub fn flatten(&mut self) {
         for i in 0..self.dim {
-            for j in (i+1)..self.dim {
+            for j in (i + 1)..self.dim {
                 self.dm[[i, j]] /= self.mask[[i, j]];
             }
         }
         self.minted = true;
     }
 
-    pub fn raw_tree(&mut self, taxon_set : &TaxonSet) -> String {
+    pub fn raw_tree(&mut self, taxon_set: &TaxonSet) -> String {
         run_fastme(taxon_set, &self.dm)
     }
 
-    pub fn to_tree(&mut self, taxon_set : &TaxonSet) -> String {
+    pub fn to_tree(&mut self, taxon_set: &TaxonSet) -> String {
         if !self.minted {
             self.flatten();
         }
@@ -130,7 +134,7 @@ impl UstarState {
     }
 }
 
-pub fn add_to_matrix(state : &mut UstarState, tree : &Tree, mode : Mode) {
+pub fn add_to_matrix(state: &mut UstarState, tree: &Tree, mode: Mode) {
     // a straightforward translation of the treeswift logic
     // sparse vector of distances
     let mut leaf_dists = Vec::<Vec<(usize, f64)>>::new();
@@ -156,10 +160,10 @@ pub fn add_to_matrix(state : &mut UstarState, tree : &Tree, mode : Mode) {
                 }
             }
 
-            let node_children : Vec<usize> = tree.children(node).collect();
+            let node_children: Vec<usize> = tree.children(node).collect();
             for c1 in 0..(node_children.len() - 1) {
                 let leaves_c1 = leaf_dists.get(node_children[c1]).unwrap();
-                for c2 in (c1+1)..(node_children.len()) {
+                for c2 in (c1 + 1)..(node_children.len()) {
                     let leaves_c2 = leaf_dists.get(node_children[c2]).unwrap();
                     for i in 0..(leaves_c1.len()) {
                         for j in 0..(leaves_c2.len()) {
@@ -176,7 +180,7 @@ pub fn add_to_matrix(state : &mut UstarState, tree : &Tree, mode : Mode) {
                     }
                 }
             }
-            
+
             for (i, e) in tree.children(node).enumerate() {
                 if i == 0 {
                     leaf_dists.swap(node, tree.firstchild[node] as usize);
@@ -186,28 +190,29 @@ pub fn add_to_matrix(state : &mut UstarState, tree : &Tree, mode : Mode) {
                     leaf_dists[node].append(&mut v);
                 }
             }
-            // let v = &*leaf_dists.get(&(tree.firstchild[node] as usize)).unwrap();
-            // leaf_dists.insert(node, v.clone());
         }
     }
 }
 
 #[derive(Debug)]
 pub struct TreeCollection {
-    pub taxon_set : TaxonSet,
-    pub trees : Vec<Tree>,
+    pub taxon_set: TaxonSet,
+    pub trees: Vec<Tree>,
 }
 
 impl TreeCollection {
     pub fn new() -> Self {
         TreeCollection {
-            taxon_set : TaxonSet::new(),
-            trees : Vec::new(),
+            taxon_set: TaxonSet::new(),
+            trees: Vec::new(),
         }
     }
 
-    pub fn from_newick<P>(filename : P, config : &UstarConfig) -> Result<Self, &'static str> where P : AsRef<Path> {
-        let mut trees : Vec<Tree> = vec![];
+    pub fn from_newick<P>(filename: P, config: &UstarConfig) -> Result<Self, &'static str>
+    where
+        P: AsRef<Path>,
+    {
+        let mut trees: Vec<Tree> = vec![];
         let mut taxon_set = TaxonSet::new();
         if let Ok(lines) = read_lines(filename) {
             for line in lines {
@@ -218,10 +223,7 @@ impl TreeCollection {
                     return Err("Error reading file");
                 }
             }
-            return Ok(TreeCollection {
-                taxon_set,
-                trees,
-            });
+            return Ok(TreeCollection { taxon_set, trees });
         } else {
             return Err("Could not read file");
         }
@@ -230,52 +232,52 @@ impl TreeCollection {
 
 #[derive(Debug)]
 pub struct Tree {
-    pub taxa : Vec<i32>,
-    pub parents : Vec<i32>,
-    pub support : Vec<f64>, // branch support
-    pub lengths : Vec<f64>, // branch lengths
-    pub firstchild : Vec<i32>,
-    pub nextsib : Vec<i32>,
-    pub childcount : Vec<u32>,
-    pub fake_root : bool,
+    pub taxa: Vec<i32>,
+    pub parents: Vec<i32>,
+    pub support: Vec<f64>, // branch support
+    pub lengths: Vec<f64>, // branch lengths
+    pub firstchild: Vec<i32>,
+    pub nextsib: Vec<i32>,
+    pub childcount: Vec<u32>,
+    pub fake_root: bool,
 }
 
 impl Tree {
-    pub fn children(&self, node : usize) -> ChildrenIterator {
+    pub fn children(&self, node: usize) -> ChildrenIterator {
         ChildrenIterator::new(self, node)
     }
-    
+
     pub fn postorder(&self) -> PostorderIterator {
         PostorderIterator::new(self)
     }
 
-    pub fn is_leaf(&self, node : usize) -> bool {
+    pub fn is_leaf(&self, node: usize) -> bool {
         if self.childcount[node] == 0 {
             return true;
         }
         false
     }
 
-    pub fn is_root(&self, node : usize) -> bool {
+    pub fn is_root(&self, node: usize) -> bool {
         return node == 0;
     }
- }
+}
 
 pub struct PostorderIterator {
     // s1 : Vec<usize>,
-    s2 : Vec<usize>,
+    s2: Vec<usize>,
 }
 
 pub struct ChildrenIterator<'a> {
-    tree : &'a Tree,
-    current : i32,
+    tree: &'a Tree,
+    current: i32,
 }
 
 impl<'a> ChildrenIterator<'a> {
-    pub fn new(tree : &'a Tree, node : usize) -> Self {
+    pub fn new(tree: &'a Tree, node: usize) -> Self {
         ChildrenIterator {
-            tree : tree,
-            current : tree.firstchild[node],
+            tree: tree,
+            current: tree.firstchild[node],
         }
     }
 }
@@ -318,18 +320,18 @@ impl Iterator for PostorderIterator {
     }
 }
 
-pub fn run_fastme(taxon_set : &TaxonSet, dm : &Array<f64, Ix2>) -> String {
+pub fn run_fastme(taxon_set: &TaxonSet, dm: &Array<f64, Ix2>) -> String {
     let size = taxon_set.len() as i32;
     unsafe {
-        let mut A = initDoubleMatrix(2*size-2);
-        let mut D = initDoubleMatrix(2*size-2);
-        fillZeroMatrix(&mut A as *mut *mut *mut f64, 2 * size-2);
+        let mut A = initDoubleMatrix(2 * size - 2);
+        let mut D = initDoubleMatrix(2 * size - 2);
+        fillZeroMatrix(&mut A as *mut *mut *mut f64, 2 * size - 2);
         for i in 0..size {
             let ptr = D.offset(i as isize);
             *ptr = mCalloc(size, size_of::<f64>() as u64) as *mut f64;
         }
         for i in 0..size {
-            for j in (i+1)..size {
+            for j in (i + 1)..size {
                 // let row = D.offset(i as isize);
                 // let r2 = *row;
                 // let ptr = r2.offset(j as isize);
@@ -362,9 +364,17 @@ pub fn run_fastme(taxon_set : &TaxonSet, dm : &Array<f64, Ix2>) -> String {
         }
 
         let mut t = ComputeTree(&mut options, D, A, &mut species, size, 8);
-        let mut nniCount : i32 = 0;
-        let mut sprCount : i32 = 0;
-        t = ImproveTree(&mut options, t, D, A, &mut nniCount, &mut sprCount, options.fpO_stat_file);
+        let mut nniCount: i32 = 0;
+        let mut sprCount: i32 = 0;
+        t = ImproveTree(
+            &mut options,
+            t,
+            D,
+            A,
+            &mut nniCount,
+            &mut sprCount,
+            options.fpO_stat_file,
+        );
         let mut tree_output = vec![0u8; (size << 10) as usize]; //Vec::<u8>::with_capacity((size << 10) as usize);
         NewickPrintTreeStr(t, tree_output.as_mut_ptr() as *mut i8, 2);
         let result = CString::from_vec_unchecked(tree_output);
@@ -387,12 +397,12 @@ pub fn translate_newick(taxon_set: &TaxonSet, newick: &str) -> String {
         } else if c == ',' {
             buf.push(',');
         } else if c == ':' {
-            let mut ls  = "".to_string();
+            let mut ls = "".to_string();
             loop {
                 match chars.peek() {
                     Some(',') | Some(')') | Some(';') | Some('[') | None => {
                         break;
-                    },
+                    }
                     Some(_) => {
                         ls.push(chars.next().unwrap());
                     }
@@ -408,7 +418,7 @@ pub fn translate_newick(taxon_set: &TaxonSet, newick: &str) -> String {
                 match chars.peek() {
                     Some(':') | Some(',') | Some(')') | Some(';') | Some('[') | None => {
                         break;
-                    },
+                    }
                     Some(_) => {
                         ts.push(chars.next().unwrap());
                     }
@@ -425,16 +435,16 @@ pub fn translate_newick(taxon_set: &TaxonSet, newick: &str) -> String {
     return buf;
 }
 
-pub fn parse_newick(taxon_set: &mut TaxonSet, newick: &str, config : &UstarConfig) -> Tree {
-    let mut taxa : Vec<i32> = vec![-42];
-    let mut parents : Vec<i32> = vec![0];
-    let mut support : Vec<f64> = vec![-1.0];
-    let mut lengths : Vec<f64> = vec![-1.0];
-    let mut childcount : Vec<u32> = vec![0];
-    let mut firstchild : Vec<i32> = vec![-1];
-    let mut nextsib : Vec<i32> = vec![-1];
+pub fn parse_newick(taxon_set: &mut TaxonSet, newick: &str, config: &UstarConfig) -> Tree {
+    let mut taxa: Vec<i32> = vec![-42];
+    let mut parents: Vec<i32> = vec![0];
+    let mut support: Vec<f64> = vec![-1.0];
+    let mut lengths: Vec<f64> = vec![-1.0];
+    let mut childcount: Vec<u32> = vec![0];
+    let mut firstchild: Vec<i32> = vec![-1];
+    let mut nextsib: Vec<i32> = vec![-1];
     // we just reuse TreeSwift's logic
-    let mut n : usize = 0; // the current node
+    let mut n: usize = 0; // the current node
     let mut chars = newick.chars().fuse().peekable();
     while let Some(c) = chars.next() {
         if c == ';' {
@@ -465,12 +475,12 @@ pub fn parse_newick(taxon_set: &mut TaxonSet, newick: &str, config : &UstarConfi
             nextsib.push(-1);
             n = taxa.len() - 1;
         } else if c == ':' {
-            let mut ls  = "".to_string();
+            let mut ls = "".to_string();
             loop {
                 match chars.peek() {
                     Some(',') | Some(')') | Some(';') | Some('[') | None => {
                         break;
-                    },
+                    }
                     Some(_) => {
                         ls.push(chars.next().unwrap());
                     }
@@ -485,7 +495,7 @@ pub fn parse_newick(taxon_set: &mut TaxonSet, newick: &str, config : &UstarConfi
                 match chars.peek() {
                     Some(':') | Some(',') | Some(')') | Some(';') | Some('[') | None => {
                         break;
-                    },
+                    }
                     Some(_) => {
                         ts.push(chars.next().unwrap());
                     }
@@ -521,7 +531,16 @@ pub fn parse_newick(taxon_set: &mut TaxonSet, newick: &str, config : &UstarConfi
         lengths[c] = length;
         lengths[c2] = length;
     }
-    let tree = Tree { taxa, parents, support, lengths, firstchild, nextsib, childcount, fake_root };
+    let tree = Tree {
+        taxa,
+        parents,
+        support,
+        lengths,
+        firstchild,
+        nextsib,
+        childcount,
+        fake_root,
+    };
     return tree;
 }
 
@@ -539,7 +558,7 @@ pub mod tests {
 
     #[test]
     fn test_read_tree_collection() {
-        let trees = TreeCollection::from_newick(avian_tree(),&UstarConfig::default()).unwrap();
+        let trees = TreeCollection::from_newick(avian_tree(), &UstarConfig::default()).unwrap();
         assert_eq!(48, trees.taxon_set.len());
         assert_eq!(100, trees.trees.len());
     }
@@ -547,7 +566,7 @@ pub mod tests {
     #[test]
     fn test_ustar_state_from_collection() {
         let trees = TreeCollection::from_newick(avian_tree(), &UstarConfig::default()).unwrap();
-        let ustar = UstarState::from_tree_collection(&trees,&UstarConfig::default());
+        let ustar = UstarState::from_tree_collection(&trees, &UstarConfig::default());
         assert!(!ustar.mask.is_empty());
     }
 }
