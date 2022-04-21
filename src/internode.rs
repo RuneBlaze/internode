@@ -4,6 +4,7 @@
 #![allow(dead_code)]
 
 use clap::ArgEnum;
+use ndarray::AssignElem;
 use ndarray::prelude::*;
 use ndarray::Array;
 use std::collections::VecDeque;
@@ -11,6 +12,7 @@ use std::ffi::CString;
 use std::fs::File;
 use std::io::{self, BufRead};
 use std::mem::size_of;
+use std::ops::AddAssign;
 use std::path::Path;
 use std::ptr;
 use std::{borrow::Borrow, cmp::max, collections::HashMap};
@@ -67,13 +69,15 @@ pub struct UstarState {
     pub mask: Array<f64, Ix2>,
     pub dim: usize,
     pub minted: bool,
+    pub temp: Option<Array<f64, Ix2>>,
+    pub norm_factor : f64,
 }
 
 #[derive(Copy, Clone, PartialEq, Eq, PartialOrd, Ord, ArgEnum, Debug)]
 pub enum Mode {
     Support,
     Internode,
-    RLength,
+    NLength,
 }
 
 pub struct UstarConfig {
@@ -93,7 +97,7 @@ impl Default for UstarConfig {
 }
 
 impl UstarState {
-    pub fn from_taxon_set(taxon_set: &TaxonSet) -> Self {
+    pub fn from_taxon_set(taxon_set: &TaxonSet, config: &UstarConfig) -> Self {
         let n = taxon_set.len();
         let dm = Array::<f64, _>::zeros((n, n).f());
         let mask = Array::<f64, _>::zeros((n, n).f());
@@ -102,13 +106,25 @@ impl UstarState {
             mask,
             dim: n,
             minted: false,
+            temp: match config.mode {
+                Mode::NLength => Some(Array::<f64, _>::zeros((n, n).f())),
+                _ => None,
+            },
+            norm_factor: -1.0,
         }
     }
 
     pub fn from_tree_collection(tree_collection: &TreeCollection, config: &UstarConfig) -> Self {
-        let mut state = UstarState::from_taxon_set(&tree_collection.taxon_set);
-        for t in &tree_collection.trees {
-            add_to_matrix(&mut state, t, config.mode);
+        let mut state = UstarState::from_taxon_set(&tree_collection.taxon_set, config);
+        if config.mode == Mode::NLength {
+            state.temp = Some(Array::<f64, _>::zeros((state.dim, state.dim).f()));
+            for t in &tree_collection.trees {
+                add_to_matrix_with_temp(&mut state, t, config.mode);
+            }
+        } else {
+            for t in &tree_collection.trees {
+                add_to_matrix(&mut state, t, config.mode);
+            }
         }
         return state;
     }
@@ -155,7 +171,7 @@ pub fn add_to_matrix(state: &mut UstarState, tree: &Tree, mode: Mode) {
                     e.1 += match mode {
                         Mode::Support => tree.support[c],
                         Mode::Internode => 1.0,
-                        Mode::RLength => tree.lengths[c],
+                        Mode::NLength => tree.lengths[c],
                     };
                 }
             }
@@ -192,6 +208,76 @@ pub fn add_to_matrix(state: &mut UstarState, tree: &Tree, mode: Mode) {
             }
         }
     }
+}
+
+// FIXME: this is duplicating code
+// used only when mode is NLength
+pub fn add_to_matrix_with_temp(state: &mut UstarState, tree: &Tree, _: Mode) {
+    let temp = state.temp.as_mut().unwrap();
+    temp.fill(0.0);
+    let mut leaf_dists = Vec::<Vec<(usize, f64)>>::new();
+    leaf_dists.resize(tree.taxa.len(), Vec::new());
+    let mut max_dis : f64 = 0.0;
+    for node in tree.postorder() {
+        if tree.is_leaf(node) {
+            leaf_dists[node].push((node, 0.0));
+        } else {
+            let mut calculated_root = false;
+            for c in tree.children(node) {
+                if tree.is_root(node) && tree.fake_root {
+                    if calculated_root {
+                        continue;
+                    }
+                    calculated_root = true;
+                }
+                for e in leaf_dists.get_mut(c).unwrap() {
+                    e.1 += tree.lengths[c];
+                }
+            }
+
+            let node_children: Vec<usize> = tree.children(node).collect();
+            for c1 in 0..(node_children.len() - 1) {
+                let leaves_c1 = leaf_dists.get(node_children[c1]).unwrap();
+                for c2 in (c1 + 1)..(node_children.len()) {
+                    let leaves_c2 = leaf_dists.get(node_children[c2]).unwrap();
+                    for i in 0..(leaves_c1.len()) {
+                        for j in 0..(leaves_c2.len()) {
+                            let (u, ud) = leaves_c1[i];
+                            let (v, vd) = leaves_c2[j];
+                            let dist = ud + vd;
+                            let u_leaf = tree.taxa[u] as usize;
+                            let v_leaf = tree.taxa[v] as usize;
+                            let l = std::cmp::min(u_leaf, v_leaf);
+                            let r = std::cmp::max(u_leaf, v_leaf);
+                            temp[[l, r]] += dist;
+                            max_dis = max_dis.max(dist);
+                            state.mask[[l, r]] += 1.0;
+                        }
+                    }
+                }
+            }
+
+            for (i, e) in tree.children(node).enumerate() {
+                if i == 0 {
+                    leaf_dists.swap(node, tree.firstchild[node] as usize);
+                } else {
+                    leaf_dists.push(vec![]);
+                    let mut v = leaf_dists.swap_remove(e);
+                    leaf_dists[node].append(&mut v);
+                }
+            }
+        }
+    }
+    if state.norm_factor <= 0.0 {
+        state.norm_factor = max_dis;
+    }
+    if max_dis <= 0.0 {
+        return;
+    }
+    max_dis /= state.norm_factor;
+    temp.indexed_iter().for_each(|((i, j), v)| {
+        state.dm[[i, j]] += v / max_dis;
+    });
 }
 
 #[derive(Debug)]
@@ -569,8 +655,4 @@ pub mod tests {
         let ustar = UstarState::from_tree_collection(&trees, &UstarConfig::default());
         assert!(!ustar.mask.is_empty());
     }
-}
-
-fn main() {
-    println!("Hello, world!");
 }
