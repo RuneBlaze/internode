@@ -73,7 +73,8 @@ pub struct UstarState {
 pub enum Mode {
     Support,
     Internode,
-    RLength,
+    Length,
+    Hybrid,
 }
 
 pub struct UstarConfig {
@@ -107,8 +108,17 @@ impl UstarState {
 
     pub fn from_tree_collection(tree_collection: &TreeCollection, config: &UstarConfig) -> Self {
         let mut state = UstarState::from_taxon_set(&tree_collection.taxon_set);
-        for t in &tree_collection.trees {
-            add_to_matrix(&mut state, t, config.mode);
+        match config.mode {
+            Mode::Support | Mode::Internode => {
+                for t in &tree_collection.trees {
+                    add_to_matrix(&mut state, t, config.mode);
+                }
+            },
+            Mode::Length | Mode::Hybrid => {
+                for t in &tree_collection.trees {
+                    add_to_matrix_weighted(&mut state, t, config.mode);
+                }
+            },
         }
         return state;
     }
@@ -155,7 +165,8 @@ pub fn add_to_matrix(state: &mut UstarState, tree: &Tree, mode: Mode) {
                     e.1 += match mode {
                         Mode::Support => tree.support[c],
                         Mode::Internode => 1.0,
-                        Mode::RLength => tree.lengths[c],
+                        Mode::Length => if tree.lengths[c] <= 0.0 {0.0} else {1.0},
+                        Mode::Hybrid => tree.support[c],
                     };
                 }
             }
@@ -175,7 +186,74 @@ pub fn add_to_matrix(state: &mut UstarState, tree: &Tree, mode: Mode) {
                             let l = std::cmp::min(u_leaf, v_leaf);
                             let r = std::cmp::max(u_leaf, v_leaf);
                             state.dm[[l, r]] += dist;
-                            state.mask[[l, r]] += 1.0;
+                            state.mask[[l, r]] += match mode {
+                                Mode::Hybrid | Mode::Length => 1.0,
+                                _ => 1.0,
+                            };
+                        }
+                    }
+                }
+            }
+
+            for (i, e) in tree.children(node).enumerate() {
+                if i == 0 {
+                    leaf_dists.swap(node, tree.firstchild[node] as usize);
+                } else {
+                    leaf_dists.push(vec![]);
+                    let mut v = leaf_dists.swap_remove(e);
+                    leaf_dists[node].append(&mut v);
+                }
+            }
+        }
+    }
+}
+
+// FIXME: duplicate code
+pub fn add_to_matrix_weighted(state: &mut UstarState, tree: &Tree, mode: Mode) {
+    // a straightforward translation of the treeswift logic
+    // sparse vector of distances
+    let mut leaf_dists = Vec::<Vec<(usize, (f64, f64))>>::new();
+    leaf_dists.resize(tree.taxa.len(), Vec::new());
+    for node in tree.postorder() {
+        if tree.is_leaf(node) {
+            leaf_dists[node].push((node, (0.0, 0.0)));
+        } else {
+            let mut calculated_root = false;
+            for c in tree.children(node) {
+                if tree.is_root(node) && tree.fake_root {
+                    if calculated_root {
+                        continue;
+                    }
+                    calculated_root = true;
+                }
+                for e in leaf_dists.get_mut(c).unwrap() {
+                    let mut m = e.1;
+                    m.0 += tree.lengths[c];
+                    m.1 += match mode {
+                        Mode::Length => if tree.lengths[c] <= 0.0 {0.0} else {1.0},
+                        Mode::Hybrid => tree.support[c],
+                        _ => 0.0,
+                    };
+                }
+            }
+
+            let node_children: Vec<usize> = tree.children(node).collect();
+            for c1 in 0..(node_children.len() - 1) {
+                let leaves_c1 = leaf_dists.get(node_children[c1]).unwrap();
+                for c2 in (c1 + 1)..(node_children.len()) {
+                    let leaves_c2 = leaf_dists.get(node_children[c2]).unwrap();
+                    for i in 0..(leaves_c1.len()) {
+                        for j in 0..(leaves_c2.len()) {
+                            let (u, (ul, ud)) = leaves_c1[i];
+                            let (v, (vl, vd)) = leaves_c2[j];
+                            let dist = ud + vd;
+                            let tt_length = ul + vl;
+                            let u_leaf = tree.taxa[u] as usize;
+                            let v_leaf = tree.taxa[v] as usize;
+                            let l = std::cmp::min(u_leaf, v_leaf);
+                            let r = std::cmp::max(u_leaf, v_leaf);
+                            state.dm[[l, r]] += dist * tt_length.exp();
+                            state.mask[[l, r]] += tt_length.exp();
                         }
                     }
                 }
