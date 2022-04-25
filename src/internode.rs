@@ -254,8 +254,8 @@ pub fn add_to_matrix_weighted(state: &mut UstarState, tree: &Tree, mode: Mode) {
                             let l = std::cmp::min(u_leaf, v_leaf);
                             let r = std::cmp::max(u_leaf, v_leaf);
                             // println!("{:?} {:?} {:?} {:?} {:?} {:?}", u, v, l, r, dist, tt_length);
-                            state.dm[[l, r]] += dist * tt_length.exp();
-                            state.mask[[l, r]] += tt_length.exp();
+                            state.dm[[l, r]] += dist * (-tt_length).exp();
+                            state.mask[[l, r]] += (-tt_length).exp();
                         }
                     }
                 }
