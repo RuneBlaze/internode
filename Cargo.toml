@@ -1,8 +1,7 @@
 [package]
 name = "internode"
-version = "0.0.6-alpha.1"
+version = "0.0.5"
 edition = "2021"
-description = "Fast implementation of ASTRID-like methods"
 
 [dependencies]
 ndarray = "0.15.0"

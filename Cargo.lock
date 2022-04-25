@@ -207,7 +207,7 @@ dependencies = [
 
 [[package]]
 name = "internode"
-version = "0.0.6-alpha.1"
+version = "0.0.5"
 dependencies = [
  "bindgen",
  "cc",
