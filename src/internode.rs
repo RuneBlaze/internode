@@ -126,6 +126,7 @@ impl UstarState {
     pub fn flatten(&mut self) {
         for i in 0..self.dim {
             for j in (i + 1)..self.dim {
+                // println!("{:?} {:?} {:?} {:?}", i, j, self.dm[[i, j]], self.mask[[i, j]]);
                 self.dm[[i, j]] /= self.mask[[i, j]];
             }
         }
@@ -227,7 +228,7 @@ pub fn add_to_matrix_weighted(state: &mut UstarState, tree: &Tree, mode: Mode) {
                     calculated_root = true;
                 }
                 for e in leaf_dists.get_mut(c).unwrap() {
-                    let mut m = e.1;
+                    let mut m = &mut e.1;
                     m.0 += tree.lengths[c];
                     m.1 += match mode {
                         Mode::Length => if tree.lengths[c] <= 0.0 {0.0} else {1.0},
@@ -252,6 +253,7 @@ pub fn add_to_matrix_weighted(state: &mut UstarState, tree: &Tree, mode: Mode) {
                             let v_leaf = tree.taxa[v] as usize;
                             let l = std::cmp::min(u_leaf, v_leaf);
                             let r = std::cmp::max(u_leaf, v_leaf);
+                            // println!("{:?} {:?} {:?} {:?} {:?} {:?}", u, v, l, r, dist, tt_length);
                             state.dm[[l, r]] += dist * tt_length.exp();
                             state.mask[[l, r]] += tt_length.exp();
                         }
