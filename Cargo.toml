@@ -7,6 +7,8 @@ description = "Fast implementation of ASTRID-like methods"
 [dependencies]
 ndarray = "0.15.0"
 clap = { version = "3.1.8", features = ["derive"] }
+rayon = "1.5"
+thread_local = "1.1"
 
 [build-dependencies]
 bindgen = "0.59.2"

@@ -7,6 +7,8 @@ use clap::ArgEnum;
 use ndarray::AssignElem;
 use ndarray::prelude::*;
 use ndarray::Array;
+use std::borrow::BorrowMut;
+use std::cell::RefCell;
 use std::collections::VecDeque;
 use std::ffi::CString;
 use std::fs::File;
@@ -15,7 +17,11 @@ use std::mem::size_of;
 use std::ops::AddAssign;
 use std::path::Path;
 use std::ptr;
+use std::sync::Arc;
 use std::{borrow::Borrow, cmp::max, collections::HashMap};
+use rayon::prelude::*;
+use thread_local::ThreadLocal;
+
 include!(concat!(env!("OUT_DIR"), "/bindings.rs"));
 
 #[derive(Debug)]
@@ -129,6 +135,20 @@ impl UstarState {
         return state;
     }
 
+    pub fn from_tree_collection_par(tree_collection: &TreeCollection, config: &UstarConfig) -> Self {
+        let tls = Arc::new(ThreadLocal::new());
+        let _ = &tree_collection.trees.par_iter().for_each(|t| {
+            let state = tls.get_or(|| 
+                RefCell::new(UstarState::from_taxon_set(&tree_collection.taxon_set, config)));
+            add_to_matrix(&mut state.borrow_mut(), t, config.mode);
+        });
+        let mut state = UstarState::from_taxon_set(&tree_collection.taxon_set, config);
+        Arc::try_unwrap(tls).unwrap().into_iter().for_each(|s| {
+            state.add_from(&s.borrow());
+        });
+        return state;
+    }
+
     pub fn flatten(&mut self) {
         for i in 0..self.dim {
             for j in (i + 1)..self.dim {
@@ -147,6 +167,15 @@ impl UstarState {
             self.flatten();
         }
         self.raw_tree(taxon_set)
+    }
+
+    pub fn add_from(&mut self, rhs : &UstarState) {
+        rhs.dm.indexed_iter().for_each(|((i, j), v)| {
+            self.dm[[i, j]] += v;
+        });
+        rhs.mask.indexed_iter().for_each(|((i, j), v)| {
+            self.mask[[i, j]] += v;
+        });
     }
 }
 
