@@ -29,11 +29,11 @@ struct Args {
     output: Option<PathBuf>,
     #[clap(short, long, arg_enum, default_value_t = Mode::Support)]
     mode: Mode,
-    #[clap(short = 'x', long, default_value_t = 1.0)]
+    #[clap(short = 'x', long, default_value_t = 1.0, help="divider of support.")]
     max_support: f64,
-    #[clap(short, long, default_value_t = 0.0)]
+    #[clap(short, long, default_value_t = 0.0, help="support value that denotes no information (lower bound).")]
     normalizer: f64,
-    #[clap(short, long, default_value_t = 1usize)]
+    #[clap(short, long, default_value_t = 1usize, help="number of threads. Currently only useful for very large (2000+ genes and 50+ species) datasets.")]
     threads : usize,
 }
 
