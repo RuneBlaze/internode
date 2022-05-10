@@ -24,7 +24,7 @@ it should be specified as such via `-n`, for example `-n 0.333`. This way the su
  - `wastrid -i $genes -x 100 -o $output` (bootstrap support with support value upper-bound `100`)
  - `wastrid -i $genes -o $output` (any support that  has range `[0, 1]`, for example, the default support of FastTree)
 
-Currently the support value normalization is different from what is used in weighted ASTRAL (as of `astral-hybrid` v1.4.2.3). The upper-bound (`-x`) is first divided then the lower bound (`-n`) subtracted, but for the above three types of support the flags are consistent across wASTRAL and this project.
+Currently the support value normalization is different from what is used in weighted ASTRAL (as of `astral-hybrid` v1.4.2.3). The upper-bound (`-x`) is first divided by then the lower bound (`-n`) subtracted. Also the default upper-bound for weighted ASTRID is `1` while for `astral-hybrid` `100` -- there will be a UX overhaul of the flags.
 
 For determining which support to use, aBayes support *seems* like the most accurate support to use (for weighted ASTRAL too AFAIK).
 
