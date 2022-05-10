@@ -53,7 +53,7 @@ fn main() {
         UstarState::from_tree_collection(&trees, &config)
     } else {
         rayon::ThreadPoolBuilder::new().num_threads(args.threads).build_global().unwrap();
-        UstarState::from_tree_collection_par(&trees, &config)
+        UstarState::from_tree_collection_par(&trees, &config, args.threads)
     };
     let tree = ustar.to_tree(&trees.taxon_set);
     if let Some(out) = args.output {

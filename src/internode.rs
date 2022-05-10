@@ -135,12 +135,24 @@ impl UstarState {
         return state;
     }
 
-    pub fn from_tree_collection_par(tree_collection: &TreeCollection, config: &UstarConfig) -> Self {
+    pub fn from_tree_collection_par(tree_collection: &TreeCollection, config: &UstarConfig, nthreads : usize) -> Self {
         let tls = Arc::new(ThreadLocal::new());
-        let _ = &tree_collection.trees.par_iter().for_each(|t| {
-            let state = tls.get_or(|| 
+        // FIXME: this is really a hack for efficient parallelization
+        let chunk_size_bound = match tree_collection.ntaxa() {
+            n if n <= 50 => 10000usize,
+            n if n <= 500 => 2000usize,
+            n if n <= 1000 => 500usize,
+            _ => 200usize,
+        };
+        let chunk_size = (tree_collection.trees.len() / nthreads + 1).max(chunk_size_bound);
+        let _ = &tree_collection.trees.par_chunks(chunk_size).for_each(|trees| {
+            let tls2 = tls.clone();
+            let state = tls2.get_or(|| 
                 RefCell::new(UstarState::from_taxon_set(&tree_collection.taxon_set, config)));
-            add_to_matrix(&mut state.borrow_mut(), t, config.mode);
+            let mut borrowed = state.borrow_mut();
+            for t in trees {
+                add_to_matrix(&mut borrowed, t, config.mode);
+            }
         });
         let mut state = UstarState::from_taxon_set(&tree_collection.taxon_set, config);
         Arc::try_unwrap(tls).unwrap().into_iter().for_each(|s| {
@@ -342,6 +354,14 @@ impl TreeCollection {
         } else {
             return Err("Could not read file");
         }
+    }
+
+    pub fn ngenes(&self) -> usize {
+        self.trees.len()
+    }
+
+    pub fn ntaxa(&self) -> usize {
+        self.taxon_set.len()
     }
 }
 
