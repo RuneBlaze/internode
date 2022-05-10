@@ -494,7 +494,10 @@ pub fn run_fastme(taxon_set: &TaxonSet, dm: &Array<f64, Ix2>) -> String {
         NewickPrintTreeStr(t, tree_output.as_mut_ptr() as *mut i8, 2);
         let result = CString::from_vec_unchecked(tree_output);
         let s = result.to_str().unwrap().to_owned();
-        return translate_newick(taxon_set, &s);
+        let translated = translate_newick(taxon_set, &s);
+        freeMatrix(A, 2 * size - 2);
+        freeMatrix(D, 2 * size - 2); // there are probably other leaks present
+        return translated;
     }
 }
 
