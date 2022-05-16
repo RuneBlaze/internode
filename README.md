@@ -23,7 +23,7 @@ tree, when unspecified, goes to `STDOUT`.
 `mode` defaults to `support`, which sums up the internode support (wASTRID-s). 
 Set it to `internode` for an emulation of the original ASTRID's behavior -- simply summing up `1` for each branch. If the support values are upper-bounded by somthing greater than 1 (say, if using bootstrap support in the values between 0 and 100), then the `-x` option needs to be specified to be the upper-bound (`-x 100`).
 
-Likewise, if some support value should mean "no information" (AFAIK, aBayes from IQTree),
+Likewise, if some support value should mean "no information" (AFAIK, approximate Bayesian (aBayes) support from IQTree),
 it should be specified as such via `-n`, for example `-n 0.333`. This way the support values are normalized from `[0.333, 1]` to `[0, 1]`. These options names are borrowed from weighted ASTRAL. To summarize, for support-weighted use-cases,
 
  - `wastrid -i $genes -n 0.333 -o $output` (aBayes)
@@ -33,7 +33,7 @@ it should be specified as such via `-n`, for example `-n 0.333`. This way the su
 Currently the support value normalization is different from what is used in weighted ASTRAL (as of `astral-hybrid` v1.4.2.3). The upper-bound (`-x`) is first divided by then the lower bound (`-n`) subtracted. Also the default upper-bound for weighted ASTRID is `1` while for `astral-hybrid` `100` -- there will be a UX overhaul of the flags.
 
 For determining which support to use, aBayes support *seems* like the most accurate support to use (for weighted ASTRAL too AFAIK).
-Because aBayes is not yet a popular measure of support for phylogenomic analyses, using it requires reannotating the gene trees.
+Because aBayes is not yet a popular measure of support for phylogenomic analyses, the gene trees might need to be reannotated.
 
 Note that missing data in the internode distance is not handled properly: each pair of taxa must appear in some gene tree, or else missing data will occur, which is not yet properly handled. For example,
 if a gene tree has all taxa, then there will be no missing data (otherwise there might be).
@@ -47,7 +47,7 @@ wastrid -i gtrees.tre -m internode
 ```
 
 Weighted ASTRID by support on IQTree aBayes support: output is written to a file
-specified by the full-path `species.tre`
+specified by the path `species.tre`
 
 ```bash
 wastrid -i gtrees.tre -n 0.333 [-m support] -o species.tre
@@ -78,6 +78,8 @@ RUSTFLAGS="-C target-cpu=native" cargo build --release
  - ASTRID-multi (see also [DISCO](https://github.com/JSdoubleL/DISCO))
 
 ## How fast?
+
+We very informally compare to to ASTRID-2:
 
 ```
 ░▒▓ ~/scratch/rigor/model.200.2000000.0.0000001/01 hyperfine --warmup 1 "ASTRID -s -i gtrees.tre.k1000" "wastrid -i gtrees.tre.k1000 -m internode -o gtrees.tre.k1000.internode"
