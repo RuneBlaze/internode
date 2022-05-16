@@ -1,21 +1,27 @@
 internode
 ==================
 
-Fast implementation of ASTRID-like methods, alpha quality.
+Fast implementation of ASTRID(USTAR/FastME)-like methods, alpha quality.
+
+## Installation
+
+Prebuilt binaries are located in the releases for amd64 Linux and M1 Mac. Building the binary is more involved and should
+see the build instructions below.
 
 ## Usage
 
 The compiled binary name is `wastrid` (weighted ASTRID).
 
 ```bash
-wastrid -i <input> -m mode [-o <output>]
+wastrid -i $input -m mode [-o $output]
 ```
 
-where `<input>` is newline delimited single-copy gene trees in
-newick format. `<output>` is the full path to the output species
+where `$input` is newline delimited single-copy gene trees in
+newick format. `$output` is the full path to the output species
 tree, when unspecified, goes to `STDOUT`.
 
-`mode` defaults to `support`, which sums up the internode support. Set it to `internode` for an emulation of the original ASTRID's behavior -- simply summing up `1` for each branch. If the support values are upper-bounded by somthing greater than 1 (say, if using bootstrap support in the values between 0 and 100), then the `-x` option needs to be specified to be the upper-bound (`-x 100`).
+`mode` defaults to `support`, which sums up the internode support (wASTRID-s). 
+Set it to `internode` for an emulation of the original ASTRID's behavior -- simply summing up `1` for each branch. If the support values are upper-bounded by somthing greater than 1 (say, if using bootstrap support in the values between 0 and 100), then the `-x` option needs to be specified to be the upper-bound (`-x 100`).
 
 Likewise, if some support value should mean "no information" (AFAIK, aBayes from IQTree),
 it should be specified as such via `-n`, for example `-n 0.333`. This way the support values are normalized from `[0.333, 1]` to `[0, 1]`. These options names are borrowed from weighted ASTRAL. To summarize, for support-weighted use-cases,
@@ -27,8 +33,10 @@ it should be specified as such via `-n`, for example `-n 0.333`. This way the su
 Currently the support value normalization is different from what is used in weighted ASTRAL (as of `astral-hybrid` v1.4.2.3). The upper-bound (`-x`) is first divided by then the lower bound (`-n`) subtracted. Also the default upper-bound for weighted ASTRID is `1` while for `astral-hybrid` `100` -- there will be a UX overhaul of the flags.
 
 For determining which support to use, aBayes support *seems* like the most accurate support to use (for weighted ASTRAL too AFAIK).
+Because aBayes is not yet a popular measure of support for phylogenomic analyses, using it requires reannotating the gene trees.
 
-Note that missing data in the internode distance is not handled properly: each pair of taxa must appear in some gene tree.
+Note that missing data in the internode distance is not handled properly: each pair of taxa must appear in some gene tree, or else missing data will occur, which is not yet properly handled. For example,
+if a gene tree has all taxa, then there will be no missing data (otherwise there might be).
 
 ## Examples
 
@@ -47,7 +55,7 @@ wastrid -i gtrees.tre -n 0.333 [-m support] -o species.tre
 
 ## Building
 
-Prebuilt binaries for x86_64 Linux (using the `x86_64-unknown-linux-musl` target) and M1 Mac (M1 Mac binaries not tested) are available in the Github releases.
+To repeat: prebuilt binaries for x86_64 Linux (using the `x86_64-unknown-linux-musl` target) and M1 Mac (M1 Mac binaries not tested) are available in the Github releases.
 
 `internode` is developed with Rust, so compiling it from scratch requires a proper installation of the [Rust toolchain](https://www.rust-lang.org/learn/get-started), but the FastME bindings used internally make the compiling process a bit harder than simply `cargo build`.
 
@@ -94,3 +102,6 @@ FastME (residing in `third_party`) is derived from its
 [original source code](https://gite.lirmm.fr/atgc/FastME/), and
 of course, does not fall into the GPL licensing part of this project. I do not know a proper software license of FastME, so if this project
 results in some violation please let me know.
+
+`internode` and USTAR methods in general descend from the work of Liu and
+collaborators. See [these](https://doi.org/10.1093/sysbio/syr027) [papers](https://doi.org/10.1186/1471-2164-16-S10-S3) [for](https://doi.org/10.1109/TCBB.2016.2604812) a start.
