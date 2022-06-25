@@ -1,7 +1,10 @@
 internode
 ==================
 
-Fast implementation of ASTRID(USTAR/FastME)-like methods, alpha quality.
+Fast implementation of ASTRID-like methods. Currently this tool hosts two types of analysis:
+
+ - ASTRID (also known as USTAR/FastME)
+ - Weighted ASTRID by support (wASTRID-s)
 
 ## Installation
 
@@ -13,27 +16,28 @@ see the build instructions below.
 The compiled binary name is `wastrid` (weighted ASTRID).
 
 ```bash
-wastrid -i $input -m mode [-o $output]
+wastrid -i $gtrees -m $mode [-o $output]
 ```
 
-where `$input` is newline delimited single-copy gene trees in
-newick format. `$output` is the full path to the output species
-tree, when unspecified, goes to `STDOUT`.
+where `$input` is newline delimited single-copy gene trees in Newick format. `$output` is the full path to the output species tree, when unspecified, goes to `STDOUT`.
 
-`mode` defaults to `support`, which sums up the internode support (wASTRID-s). 
-Set it to `internode` for an emulation of the original ASTRID's behavior -- simply summing up `1` for each branch. If the support values are upper-bounded by somthing greater than 1 (say, if using bootstrap support in the values between 0 and 100), then the `-x` option needs to be specified to be the upper-bound (`-x 100`).
+`$mode` defaults to `support`, which sums up the internode support (wASTRID-s), but due to how different supports are annotated, you might need to explicitly tell `wastrid` the upper-bound and lower-bound of your support values.
+Set `mode` to `internode` for an emulation of the original ASTRID's behavior -- unweighted internode distance, in which case no extra options need to be specified.
 
-Likewise, if some support value should mean "no information" (AFAIK, approximate Bayesian (aBayes) support from IQTree),
-it should be specified as such via `-n`, for example `-n 0.333`. This way the support values are normalized from `[0.333, 1]` to `[0, 1]`. These options names are borrowed from weighted ASTRAL. To summarize, for support-weighted use-cases,
+### Specifying support upper-bound and lower-bounds
+
+When no extra options are specified, the default `support` mode assumes that the input gene trees have support values in the range between 0 and 1. This is frequently not true in practice, for example for bootstrap support the upper bound is instead `100` (but the lower bound still `0`), in this case `-x 100` should be specified. Likewise, if some support value should mean "no information" (say, approximate Bayesian (aBayes) support from IQTree),
+it should be specified as such via `-n`, for example `-n 0.333`. This way the support values are normalized from `[0.333, 1]` to `[0, 1]`. These options names are borrowed from weighted ASTRAL. To summarize, here are some common support types in gene trees and how to use them:
 
  - `wastrid -i $genes -n 0.333 -o $output` (aBayes)
  - `wastrid -i $genes -x 100 -o $output` (bootstrap support with support value upper-bound `100`)
  - `wastrid -i $genes -o $output` (any support that  has range `[0, 1]`, for example, the default support of FastTree)
 
-Currently the support value normalization is different from what is used in weighted ASTRAL (as of `astral-hybrid` v1.4.2.3). The upper-bound (`-x`) is first divided by then the lower bound (`-n`) subtracted. Also the default upper-bound for weighted ASTRID is `1` while for `astral-hybrid` `100` -- there will be a UX overhaul of the flags.
+Note that currently the support value normalization is different from what is used in weighted ASTRAL (as of `astral-hybrid` v1.4.2.3). The upper-bound (`-x`) is first divided by then the lower bound (`-n`) subtracted. Also the default upper-bound for weighted ASTRID is `1` while for `astral-hybrid` `100` -- there will be a UX overhaul of the flags.
 
-For determining which support to use, aBayes support *seems* like the most accurate support to use (for weighted ASTRAL too AFAIK).
-Because aBayes is not yet a popular measure of support for phylogenomic analyses, the gene trees might need to be reannotated.
+### Other considerations
+
+For determining the best measure of support for the gene trees, aBayes support *seems* like the most accurate support to use (for weighted ASTRAL too at this moment). Because aBayes is not yet a popular measure of support for phylogenomic analyses, the gene trees might need to be reannotated.
 
 Note that missing data in the internode distance is not handled properly: each pair of taxa must appear in some gene tree, or else missing data will occur, which is not yet properly handled. For example,
 if a gene tree has all taxa, then there will be no missing data (otherwise there might be).
@@ -53,7 +57,7 @@ specified by the path `species.tre`
 wastrid -i gtrees.tre -n 0.333 [-m support] -o species.tre
 ```
 
-## Building
+## Compilation
 
 To repeat: prebuilt binaries for x86_64 Linux (using the `x86_64-unknown-linux-musl` target) and M1 Mac (M1 Mac binaries not tested) are available in the Github releases.
 
@@ -79,10 +83,10 @@ RUSTFLAGS="-C target-cpu=native" cargo build --release
 
 ## How fast?
 
-We very informally compare to to ASTRID-2:
+We very informally compare to to ASTRID-2 on a dataset of 1000 gene trees and 200 species:
 
 ```
-░▒▓ ~/scratch/rigor/model.200.2000000.0.0000001/01 hyperfine --warmup 1 "ASTRID -s -i gtrees.tre.k1000" "wastrid -i gtrees.tre.k1000 -m internode -o gtrees.tre.k1000.internode"
+hyperfine --warmup 1 "ASTRID -s -i gtrees.tre.k1000" "wastrid -i gtrees.tre.k1000 -m internode -o gtrees.tre.k1000.internode"
 Benchmark 1: ASTRID -s -i gtrees.tre.k1000
   Time (mean ± σ):      2.099 s ±  0.034 s    [User: 1.924 s, System: 0.174 s]
   Range (min … max):    2.061 s …  2.155 s    10 runs

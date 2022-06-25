@@ -23,17 +23,23 @@ pub fn trivial_tree() -> PathBuf {
 #[derive(Parser, Debug)]
 #[clap(author, version, about, long_about = None)]
 struct Args {
+    /// Path to the input newline delimited gene trees
     #[clap(short, long)]
     input: PathBuf,
+    /// Path to the output species tree topology
     #[clap(short, long)]
     output: Option<PathBuf>,
+    /// Analysis mode
     #[clap(short, long, arg_enum, default_value_t = Mode::Support)]
     mode: Mode,
-    #[clap(short = 'x', long, default_value_t = 1.0, help="divider of support.")]
+    /// Upper bound of the support values for wASTRID-s, the divider of the support
+    #[clap(short = 'x', long, default_value_t = 1.0)]
     max_support: f64,
-    #[clap(short, long, default_value_t = 0.0, help="support value that denotes no information (lower bound).")]
+    /// Support value that denotes no information (support lower bound), for wASTRID-s
+    #[clap(short, long, default_value_t = 0.0)]
     normalizer: f64,
-    #[clap(short, long, default_value_t = 1usize, help="number of threads. Currently only useful for very large (2000+ genes and 50+ species) datasets.")]
+    /// Number of threads. Currently only useful for very large (2000+ genes and 50+ species) datasets.
+    #[clap(short, long, default_value_t = 1usize)]
     threads : usize,
 }
 
