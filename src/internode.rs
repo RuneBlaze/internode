@@ -4,19 +4,15 @@
 #![allow(dead_code)]
 
 use crate::tree::*;
-use clap::ArgEnum;
 use ndarray::prelude::*;
 use ndarray::Array;
 use rayon::prelude::*;
 use std::cell::RefCell;
 use std::ffi::CString;
-use std::fs::File;
-use std::io::{self, BufRead};
 use std::mem::size_of;
-use std::path::Path;
+use std::borrow::Borrow;
 use std::ptr;
 use std::sync::Arc;
-use std::{borrow::Borrow, collections::HashMap};
 use thread_local::ThreadLocal;
 
 include!(concat!(env!("OUT_DIR"), "/bindings.rs"));
@@ -191,6 +187,66 @@ pub fn add_to_matrix(state: &mut UstarState, tree: &Tree, mode: Mode) {
     }
 }
 
+// FIXME: use trait to DRY
+pub fn impute_matrix(state: &mut UstarState, tree: &Tree, mode: Mode) {
+    let mut leaf_dists = Vec::<Vec<(usize, f64)>>::new();
+    leaf_dists.resize(tree.taxa.len(), Vec::new());
+    for node in tree.postorder() {
+        if tree.is_leaf(node) {
+            leaf_dists[node].push((node, 0.0));
+        } else {
+            let mut calculated_root = false;
+            for c in tree.children(node) {
+                if tree.is_root(node) && tree.fake_root {
+                    if calculated_root {
+                        continue;
+                    }
+                    calculated_root = true;
+                }
+                for e in leaf_dists.get_mut(c).unwrap() {
+                    e.1 += match mode {
+                        Mode::Support => tree.support[c],
+                        Mode::Internode => 1.0,
+                        Mode::NLength => tree.lengths[c],
+                    };
+                }
+            }
+
+            let node_children: Vec<usize> = tree.children(node).collect();
+            for c1 in 0..(node_children.len() - 1) {
+                let leaves_c1 = leaf_dists.get(node_children[c1]).unwrap();
+                for c2 in (c1 + 1)..(node_children.len()) {
+                    let leaves_c2 = leaf_dists.get(node_children[c2]).unwrap();
+                    for i in 0..(leaves_c1.len()) {
+                        for j in 0..(leaves_c2.len()) {
+                            let (u, ud) = leaves_c1[i];
+                            let (v, vd) = leaves_c2[j];
+                            let dist = ud + vd;
+                            let u_leaf = tree.taxa[u] as usize;
+                            let v_leaf = tree.taxa[v] as usize;
+                            let l = std::cmp::min(u_leaf, v_leaf);
+                            let r = std::cmp::max(u_leaf, v_leaf);
+                            if state.mask[[l, r]] <= 0 {
+                                state.dm[[l, r]] = dist;
+                            }
+                        }
+                    }
+                }
+            }
+
+            for (i, e) in tree.children(node).enumerate() {
+                if i == 0 {
+                    leaf_dists.swap(node, tree.firstchild[node] as usize);
+                } else {
+                    leaf_dists.push(vec![]);
+                    let mut v = leaf_dists.swap_remove(e);
+                    leaf_dists[node].append(&mut v);
+                }
+            }
+        }
+    }
+}
+
 // FIXME: this is duplicating code
 // used only when mode is NLength
 pub fn add_to_matrix_with_temp(state: &mut UstarState, tree: &Tree, _: Mode) {
@@ -273,10 +329,6 @@ pub fn run_fastme(taxon_set: &TaxonSet, dm: &Array<f64, Ix2>) -> String {
         }
         for i in 0..size {
             for j in (i + 1)..size {
-                // let row = D.offset(i as isize);
-                // let r2 = *row;
-                // let ptr = r2.offset(j as isize);
-
                 let r1 = (*(D.offset(i as isize))).offset(j as isize);
                 let r2 = (*(D.offset(j as isize))).offset(i as isize);
                 let l = i as usize;
@@ -381,7 +433,7 @@ pub fn translate_newick(taxon_set: &TaxonSet, newick: &str) -> String {
 
 #[cfg(test)]
 pub mod tests {
-    use super::*;
+
     use std::path::PathBuf;
 
     pub fn avian_tree() -> PathBuf {

@@ -1,16 +1,8 @@
 use clap::ArgEnum;
-use ndarray::prelude::*;
-use ndarray::Array;
-use rayon::prelude::*;
-use std::cell::RefCell;
-use std::ffi::CString;
 use std::fs::File;
 use std::io::{self, BufRead};
-use std::mem::size_of;
 use std::path::Path;
-use std::ptr;
-use std::sync::Arc;
-use std::{borrow::Borrow, collections::HashMap};
+use std::collections::HashMap;
 
 #[derive(Copy, Clone, PartialEq, Eq, PartialOrd, Ord, ArgEnum, Debug)]
 pub enum Mode {
@@ -141,14 +133,14 @@ impl Tree {
         for i in 0..size {
             taxa[i] = i as i32;
         }
-        let mut parents = vec![-1; 2 * size - 1];
-        let mut support = vec![0.0; 2 * size - 1];
-        let mut lengths = vec![0.0; 2 * size - 1];
-        let mut firstchild = vec![-1; 2 * size - 1];
-        let mut nextsib = vec![-1; 2 * size - 1];
-        let mut childcount = vec![0; 2 * size - 1];
-        let mut fake_root = true;
-        return Tree {
+        let parents = vec![-1; 2 * size - 1];
+        let support = vec![0.0; 2 * size - 1];
+        let lengths = vec![0.0; 2 * size - 1];
+        let firstchild = vec![-1; 2 * size - 1];
+        let nextsib = vec![-1; 2 * size - 1];
+        let childcount = vec![0; 2 * size - 1];
+        let fake_root = true;
+        Tree {
             taxa,
             parents,
             support,
@@ -158,7 +150,7 @@ impl Tree {
             childcount,
             fake_root,
             root: 0,
-        };
+        }
     }
 
     pub fn children(&self, node: usize) -> ChildrenIterator {
