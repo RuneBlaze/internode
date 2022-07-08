@@ -1,14 +1,22 @@
 use clap::ArgEnum;
+use rayon::string;
+use std::collections::HashMap;
 use std::fs::File;
 use std::io::{self, BufRead};
 use std::path::Path;
-use std::collections::HashMap;
 
 #[derive(Copy, Clone, PartialEq, Eq, PartialOrd, Ord, ArgEnum, Debug)]
 pub enum Mode {
     Support,
     Internode,
     NLength,
+}
+
+#[derive(Copy, Clone, PartialEq, Eq, PartialOrd, Ord, Debug)]
+pub enum ImputeMethod {
+    Upgma,
+    BalMENNI,
+    BalMESPR,
 }
 
 pub struct UstarConfig {
@@ -171,6 +179,27 @@ impl Tree {
     pub fn is_root(&self, node: usize) -> bool {
         node == self.root
     }
+
+    pub fn topology_newick(&self, taxon_set: &TaxonSet) -> String {
+        let mut string_rep: Vec<String> = vec![String::new(); self.taxa.len()];
+        for node in self.postorder() {
+            if self.is_leaf(node) {
+                string_rep[node] = taxon_set.names[self.taxa[node] as usize].clone();
+            } else {
+                let mut out = String::new();
+                out.push_str("(");
+                for c in self.children(node) {
+                    out.push_str(&string_rep[c]);
+                    out.push_str(",");
+                }
+                out.pop();
+                out.push_str(")");
+                string_rep[node] = out;
+            }
+        }
+        string_rep[self.root].push_str(";");
+        string_rep.swap_remove(self.root)
+    }
 }
 
 pub fn parse_newick(taxon_set: &mut TaxonSet, newick: &str, config: &UstarConfig) -> Tree {
@@ -244,9 +273,8 @@ pub fn parse_newick(taxon_set: &mut TaxonSet, newick: &str, config: &UstarConfig
                 support[n] = 1.0;
             } else {
                 let s = ts.parse::<f64>().unwrap();
-                // let lb = config.lower_bound;
                 let rg = config.upper_bound - config.lower_bound;
-                support[n] = (s - config.lower_bound) / rg;
+                support[n] = ((s - config.lower_bound) / rg).max(0.0);
             }
         }
     }

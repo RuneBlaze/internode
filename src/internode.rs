@@ -7,10 +7,10 @@ use crate::tree::*;
 use ndarray::prelude::*;
 use ndarray::Array;
 use rayon::prelude::*;
+use std::borrow::Borrow;
 use std::cell::RefCell;
 use std::ffi::CString;
 use std::mem::size_of;
-use std::borrow::Borrow;
 use std::ptr;
 use std::sync::Arc;
 use thread_local::ThreadLocal;
@@ -25,7 +25,7 @@ pub struct UstarState {
     pub minted: bool,
     pub temp: Option<Array<f64, Ix2>>,
     pub norm_factor: f64,
-    pub has_missing : bool,
+    pub has_missing: bool,
 }
 
 impl UstarState {
@@ -113,7 +113,7 @@ impl UstarState {
     }
 
     pub fn raw_tree(&mut self, taxon_set: &TaxonSet) -> String {
-        run_fastme(taxon_set, &self.dm)
+        run_fastme(taxon_set, &self.dm, &FastMEConfig::default())
     }
 
     pub fn to_tree(&mut self, taxon_set: &TaxonSet) -> String {
@@ -323,7 +323,31 @@ pub fn add_to_matrix_with_temp(state: &mut UstarState, tree: &Tree, _: Mode) {
     });
 }
 
-pub fn run_fastme(taxon_set: &TaxonSet, dm: &Array<f64, Ix2>) -> String {
+pub struct FastMEConfig {
+    use_nni: bool,
+    use_spr: bool,
+}
+
+impl FastMEConfig {
+    pub fn new(use_nni: bool, use_spr: bool) -> FastMEConfig {
+        FastMEConfig { use_nni, use_spr }
+    }
+}
+
+impl Default for FastMEConfig {
+    fn default() -> Self {
+        FastMEConfig {
+            use_nni: true,
+            use_spr: true,
+        }
+    }
+}
+
+pub fn run_fastme(
+    taxon_set: &TaxonSet,
+    dm: &Array<f64, Ix2>,
+    fastme_config: &FastMEConfig,
+) -> String {
     let size = taxon_set.len() as i32;
     unsafe {
         let mut A = initDoubleMatrix(2 * size - 2);
@@ -346,8 +370,8 @@ pub fn run_fastme(taxon_set: &TaxonSet, dm: &Array<f64, Ix2>) -> String {
 
         let mut options = Options::default();
         Set_Defaults_Input(&mut options);
-        options.use_SPR = 1;
-        options.use_NNI = 1;
+        options.use_NNI = if fastme_config.use_nni { 1 } else { 0 };
+        options.use_SPR = if fastme_config.use_spr { 1 } else { 0 };
         options.method = TaxAddBAL as i32;
         options.NNI = BALNNI as i32;
 

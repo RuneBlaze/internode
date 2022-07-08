@@ -25,3 +25,6 @@ path = "src/main.rs"
 
 [profile.release]
 lto = "thin"
+
+[target.x86_64-unknown-linux-musl]
+linker = "/opt/homebrew/Cellar/musl-cross/0.9.9_1/bin/x86_64-linux-musl-gcc"
