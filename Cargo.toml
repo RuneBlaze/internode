@@ -1,6 +1,6 @@
 [package]
 name = "internode"
-version = "0.0.6-alpha.3"
+version = "0.0.7"
 edition = "2021"
 description = "Fast implementation of ASTRID-like methods"
 
@@ -9,6 +9,9 @@ ndarray = "0.15.0"
 clap = { version = "3.1.8", features = ["derive"] }
 rayon = "1.5"
 thread_local = "1.1"
+anyhow = "1.0"
+ordered-float = "3.0.0"
+fixedbitset = "0.4.1"
 
 [build-dependencies]
 bindgen = "0.59.2"

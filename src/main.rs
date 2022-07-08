@@ -1,24 +1,11 @@
 mod internode;
+mod tree;
+mod upgma;
 use clap::Parser;
 use internode::*;
 use std::fs;
-// use internode::tests::avian_tree;
-use ndarray::prelude::*;
 use std::path::PathBuf;
-
-pub fn avian_tree() -> PathBuf {
-    let mut d = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
-    d.push("resources/test");
-    d.push("avian.tre");
-    d
-}
-
-pub fn trivial_tree() -> PathBuf {
-    let mut d = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
-    d.push("resources/test");
-    d.push("trivial.tre");
-    d
-}
+use tree::{Mode, TreeCollection, UstarConfig};
 
 #[derive(Parser, Debug)]
 #[clap(author, version, about, long_about = None)]
@@ -40,7 +27,7 @@ struct Args {
     normalizer: f64,
     /// Number of threads. Currently only useful for very large (2000+ genes and 50+ species) datasets.
     #[clap(short, long, default_value_t = 1usize)]
-    threads : usize,
+    threads: usize,
 }
 
 fn args_to_config(args: &Args) -> UstarConfig {
@@ -58,7 +45,10 @@ fn main() {
     let mut ustar = if args.threads == 1 {
         UstarState::from_tree_collection(&trees, &config)
     } else {
-        rayon::ThreadPoolBuilder::new().num_threads(args.threads).build_global().unwrap();
+        rayon::ThreadPoolBuilder::new()
+            .num_threads(args.threads)
+            .build_global()
+            .unwrap();
         UstarState::from_tree_collection_par(&trees, &config, args.threads)
     };
     let tree = ustar.to_tree(&trees.taxon_set);
