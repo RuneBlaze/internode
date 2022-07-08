@@ -168,13 +168,16 @@ jobs:
           # - thumbv7em-none-eabihf
           # - thumbv7m-none-eabi
     steps:
+      - name: Install LLVM and Clang
+        uses: KyleMayes/install-llvm-action@v1
+        with:
+          version: "10.0"
       - uses: actions/checkout@v2
       - uses: actions/download-artifact@v1
         with:
           name: cross-linux-musl
           path: /tmp/
       - run: chmod +x /tmp/cross
-      - uses: egor-tensin/setup-clang@v1
       - run: ci/set_rust_version.bash stable ${{ matrix.target }}
       - run: ci/build.bash /tmp/cross ${{ matrix.target }} RELEASE
       - run: tar -czvf ${{ env.BIN }}.tar.gz --directory=target/${{ matrix.target }}/release ${{ env.BIN }}
