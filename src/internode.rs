@@ -25,6 +25,7 @@ pub struct UstarState {
     pub minted: bool,
     pub temp: Option<Array<f64, Ix2>>,
     pub norm_factor: f64,
+    pub has_missing : bool,
 }
 
 impl UstarState {
@@ -42,6 +43,7 @@ impl UstarState {
                 _ => None,
             },
             norm_factor: -1.0,
+            has_missing: false,
         }
     }
 
@@ -100,7 +102,11 @@ impl UstarState {
     pub fn flatten(&mut self) {
         for i in 0..self.dim {
             for j in (i + 1)..self.dim {
-                self.dm[[i, j]] /= self.mask[[i, j]] as f64;
+                if self.mask[[i, j]] <= 0 {
+                    self.has_missing = true;
+                } else {
+                    self.dm[[i, j]] /= self.mask[[i, j]] as f64;
+                }
             }
         }
         self.minted = true;

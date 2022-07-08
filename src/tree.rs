@@ -12,16 +12,16 @@ pub enum Mode {
 }
 
 pub struct UstarConfig {
-    pub max_support: f64,
-    pub normalizer: f64,
+    pub upper_bound: f64,
+    pub lower_bound: f64,
     pub mode: Mode,
 }
 
 impl Default for UstarConfig {
     fn default() -> Self {
         UstarConfig {
-            max_support: 1.0,
-            normalizer: 0.0,
+            upper_bound: 1.0,
+            lower_bound: 0.0,
             mode: Mode::Support,
         }
     }
@@ -244,12 +244,9 @@ pub fn parse_newick(taxon_set: &mut TaxonSet, newick: &str, config: &UstarConfig
                 support[n] = 1.0;
             } else {
                 let s = ts.parse::<f64>().unwrap();
-                let normalizer = config.normalizer;
-                support[n] = if normalizer <= 0.0 {
-                    s / config.max_support
-                } else {
-                    (s / config.max_support - config.normalizer) / (1.0 - config.normalizer)
-                };
+                // let lb = config.lower_bound;
+                let rg = config.upper_bound - config.lower_bound;
+                support[n] = (s - config.lower_bound) / rg;
             }
         }
     }

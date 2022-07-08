@@ -7,7 +7,7 @@ use crate::tree::Tree;
 
 type MinNotNan = Reverse<NotNan<f64>>;
 /// UPGMA*, see Pranjal's thesis section 5.2.1
-pub fn upgma_star(distance: &Array<f64, Ix2>) -> anyhow::Result<Tree> {
+pub fn upgma_star(distance: &Array<f64, Ix2>, mask : &Array<u32, Ix2>) -> anyhow::Result<Tree> {
     let n = distance.shape()[0];
     let mut m = Array::<f64, _>::zeros((n * 2, n * 2).f());
     let mut pq = BinaryHeap::<(MinNotNan, usize, usize)>::new();
@@ -18,8 +18,10 @@ pub fn upgma_star(distance: &Array<f64, Ix2>) -> anyhow::Result<Tree> {
     tree.root = 2 * n - 2;
     for i in 0..n - 1 {
         for j in i + 1..n {
-            m[[i, j]] = m[[i, j]];
-            pq.push((Reverse(NotNan::new(m[[i, j]])?), i, j));
+            if mask[[i, j]] > 0 {
+                m[[i, j]] = distance[[i, j]];
+                pq.push((Reverse(NotNan::new(m[[i, j]])?), i, j));
+            }
         }
     }
     loop {
