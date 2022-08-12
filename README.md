@@ -1,67 +1,72 @@
-internode
+Internode
 ==================
 
-Fast implementation of ASTRID-like methods. Currently this tool hosts two types of analysis:
+[![shields.io](https://img.shields.io/badge/recommended_version-0.0.7_snapshot-blue?style=for-the-badge)](https://github.com/RuneBlaze/internode/releases/tag/v0.0.7-snapshot)
 
- - ASTRID (also known as USTAR/FastME)
- - Weighted ASTRID by support (wASTRID-s)
+Very fast and accurate species tree inference despite [ILS](https://en.wikipedia.org/wiki/Incomplete_lineage_sorting). Somewhat a successor to [ASTRID-2](https://github.com/pranjalv123/ASTRID) and a competitor to [ASTER](https://github.com/chaoszhang/ASTER).
 
-## Installation
+## Quick Start
 
-Prebuilt binaries are located in the releases for amd64 Linux and M1 Mac. Building the binary is more involved and should
-see the build instructions below.
+### Installing the binary
 
-## Usage
+A single binary called `wastrid` can be downloaded from [our recommended release](https://github.com/RuneBlaze/internode/releases/tag/v0.0.7-snapshot), currently only containing binaries for x86_64 Linux and arm64 macOS. You can put it in `PATH` or simply in the directory that you wish to run it from.
 
-The compiled binary name is `wastrid` (weighted ASTRID).
+### Preparing data
 
-```bash
-wastrid -i $gtrees -m $mode [-o $output]
+If you are familiar with [ASTRAL](https://github.com/smirarab/ASTRAL)/[ASTER](https://github.com/chaoszhang/ASTER), you can skip this section as we almost use the same input format.
+
+`wastrid` accepts the common new-line delimited Newick format for input gene trees, where each line contains a gene tree in Newick format. For an example, see or simply download such a gene tree collection from [S100](https://raw.githubusercontent.com/RuneBlaze/internode/main/resources/test/s100_k200.tre) containing 200 gene trees and 101 taxa.
+
+In addition, weighted ASTRID (by support) means that the gene trees can be annotated with branch support (the linked S100 above is annotated with bootstrap support from 0 to 100).
+
+### Inferring a Species Tree
+
+Say, you have prepared this `genes.tre` file containing all your gene trees separated by newlines. Now we have two differing scenarios:
+
+ 1. The gene trees have been annotated by support values that you trust (e.g., bootstrap support, [aBayes](https://academic.oup.com/sysbio/article/60/5/685/1644562?login=false) support). Moreover, you know the upper-bound and lower-bound of these support. Continuing with our example data of S100 mentioned above, the lower bound is 0 and the upper bound is 100.
+ 2. The gene trees don't have support you trust
+
+In the first scenario, the command goes something like this:
+
+```shell
+wastrid -i genes.tre -b 0-100 -o output_stree.tre
 ```
 
-where `$input` is newline delimited single-copy gene trees in Newick format. `$output` is the full path to the output species tree, when unspecified, goes to `STDOUT`.
+where `output_stree.tre` is the output species tree path, `-b` specified our bounds for the support (lower bound 0, upper bound 100). For example, for aBayes support that can have lower bound 0.333 and upper bound 1, the bounds can be spcified as `-b 0.333-1`.
 
-`$mode` defaults to `support`, which sums up the internode support (wASTRID-s), but due to how different supports are annotated, you might need to explicitly tell `wastrid` the upper-bound and lower-bound of your support values.
-Set `mode` to `internode` for an emulation of the original ASTRID's behavior -- unweighted internode distance, in which case no extra options need to be specified.
+In the second secnario, you really just want to run ASTRID (not weighted ASTRID), in which case just do
 
-### Specifying support upper-bound and lower-bounds
+```shell
+wastrid -i genes.tre --preset vanilla -o output_stree.tre
+```
 
-When no extra options are specified, the default `support` mode assumes that the input gene trees have support values in the range between 0 and 1. This is frequently not true in practice, for example for bootstrap support the upper bound is instead `100` (but the lower bound still `0`), in this case `-x 100` should be specified. Likewise, if some support value should mean "no information" (say, approximate Bayesian (aBayes) support from IQTree),
-it should be specified as such via `-n`, for example `-n 0.333`. This way the support values are normalized from `[0.333, 1]` to `[0, 1]`. These options names are borrowed from weighted ASTRAL. To summarize, here are some common support types in gene trees and how to use them:
+where `preset` can preconfigure flags for you, other presets include:
 
- - `wastrid -i $genes -n 0.333 -o $output` (aBayes)
- - `wastrid -i $genes -x 100 -o $output` (bootstrap support with support value upper-bound `100`)
- - `wastrid -i $genes -o $output` (any support that  has range `[0, 1]`, for example, the default support of FastTree)
+ - `--preset abayes`, equivalent to `-b 0.333-1`
+ - `--preset hundred-bootstrap`, equivalent to `-b 0-100`
 
-Note that currently the support value normalization is different from what is used in weighted ASTRAL (as of `astral-hybrid` v1.4.2.3). The upper-bound (`-x`) is first divided by then the lower bound (`-n`) subtracted. Also the default upper-bound for weighted ASTRID is `1` while for `astral-hybrid` `100` -- there will be a UX overhaul of the flags.
-
-### Other considerations
-
-For determining the best measure of support for the gene trees, aBayes support *seems* like the most accurate support to use (for weighted ASTRAL too at this moment). Because aBayes is not yet a popular measure of support for phylogenomic analyses, the gene trees might need to be reannotated.
-
-Note that missing data in the internode distance is not handled properly: each pair of taxa must appear in some gene tree, or else missing data will occur, which is not yet properly handled. For example,
-if a gene tree has all taxa, then there will be no missing data (otherwise there might be).
+At which point the output species tree topology is at `output_stree.tre`. The branch lengths of the species tree are not meaningful.
 
 ## Examples
 
 Emulation of ASTRID: output is printed to STDOUT
 
 ```bash
-wastrid -i gtrees.tre -m internode
+wastrid -i gtrees.tre --preset vanilla
 ```
 
 Weighted ASTRID by support on IQTree aBayes support: output is written to a file
 specified by the path `species.tre`
 
 ```bash
-wastrid -i gtrees.tre -n 0.333 [-m support] -o species.tre
+wastrid -i gtrees.tre -b 0.333-1 [-m support] -o species.tre
 ```
 
 ## Compilation
 
-To repeat: prebuilt binaries for x86_64 Linux (using the `x86_64-unknown-linux-musl` target) and M1 Mac (M1 Mac binaries not tested) are available in the Github releases.
+Also see prebuilt binaries (located in [Releases](https://github.com/RuneBlaze/internode/releases)).
 
-`internode` is developed with Rust, so compiling it from scratch requires a proper installation of the [Rust toolchain](https://www.rust-lang.org/learn/get-started), but the FastME bindings used internally make the compiling process a bit harder than simply `cargo build`.
+`internode` is developed with Rust, so compiling it from scratch requires a proper installation of the [Rust toolchain](https://www.rust-lang.org/learn/get-started). However, the FastME bindings used internally make the compiling process a bit harder than simply `cargo build`.
 
 The FastME bindings used internally were generated via `bindgen`, which
 requires libclang. After a proper installation of `libclang` for `bindgen`, running the usual pipeline works for building the `wastrid` binary:
@@ -76,29 +81,10 @@ For maximum speed that reduces cross-machine compatibility, the usual tricks app
 RUSTFLAGS="-C target-cpu=native" cargo build --release
 ```
 
-## Missing features
-
- - Iteration ("missing data imputation") via UPGMA*. For each pair of taxa, it must appear simutaneously in some gene tree.
- - ASTRID-multi (see also [DISCO](https://github.com/JSdoubleL/DISCO))
-
-## How fast?
-
-We very informally compare to to ASTRID-2 on a dataset of 1000 gene trees and 200 species:
-
-```
-hyperfine --warmup 1 "ASTRID -s -i gtrees.tre.k1000" "wastrid -i gtrees.tre.k1000 -m internode -o gtrees.tre.k1000.internode"
-Benchmark 1: ASTRID -s -i gtrees.tre.k1000
-  Time (mean ± σ):      2.099 s ±  0.034 s    [User: 1.924 s, System: 0.174 s]
-  Range (min … max):    2.061 s …  2.155 s    10 runs
-
-Benchmark 2: wastrid -i gtrees.tre.k1000 -m internode -o gtrees.tre.k1000.internode
-  Time (mean ± σ):     431.4 ms ±   3.1 ms    [User: 410.3 ms, System: 20.6 ms]
-  Range (min … max):   428.3 ms … 437.7 ms    10 runs
-
-Summary
-  'wastrid -i gtrees.tre.k1000 -m internode -o gtrees.tre.k1000.internode' ran
-    4.87 ± 0.09 times faster than 'ASTRID -s -i gtrees.tre.k1000'
-```
+## Notes
+ - This implementation of ASTRID is faster than the original implementation (of ASTRID-2). That is, `wastrid --preset vanilla` is speed-wise a better ASTRID.
+ - Missing data imputation is implemented (and automatically turned on), but alpha quality, using the original procudure of ASTRID.
+ - ASTRID-multi (see also [DISCO](https://github.com/JSdoubleL/DISCO)) is still not implemented
 
 ## Acknowledgements
 

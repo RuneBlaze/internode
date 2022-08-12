@@ -131,7 +131,7 @@ jobs:
           # WASM, off by default as most rust projects aren't compatible yet.
           # - wasm32-unknown-emscripten
           # Linux
-          - aarch64-unknown-linux-gnu
+          # - aarch64-unknown-linux-gnu
           # - arm-unknown-linux-gnueabi
           # - armv7-unknown-linux-gnueabihf
           - i686-unknown-linux-gnu
@@ -168,13 +168,16 @@ jobs:
           # - thumbv7em-none-eabihf
           # - thumbv7m-none-eabi
     steps:
+      - name: Install LLVM and Clang
+        uses: KyleMayes/install-llvm-action@v1
+        with:
+          version: "10.0"
       - uses: actions/checkout@v2
       - uses: actions/download-artifact@v1
         with:
           name: cross-linux-musl
           path: /tmp/
       - run: chmod +x /tmp/cross
-
       - run: ci/set_rust_version.bash stable ${{ matrix.target }}
       - run: ci/build.bash /tmp/cross ${{ matrix.target }} RELEASE
       - run: tar -czvf ${{ env.BIN }}.tar.gz --directory=target/${{ matrix.target }}/release ${{ env.BIN }}
