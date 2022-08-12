@@ -75,7 +75,9 @@ fn args_to_config(args: &Args) -> UstarConfig {
 
 fn main() -> anyhow::Result<()> {
     let args = Args::parse();
-    tracing_subscriber::fmt::init();
+    tracing_subscriber::fmt()
+        .with_writer(std::io::stderr)
+        .init();
     let mut config = args_to_config(&args);
     match args.preset {
         Some(Preset::Vanilla) => {
@@ -94,7 +96,7 @@ fn main() -> anyhow::Result<()> {
         None => {},
     }
     if let Some(preset) = args.preset {
-        info!("applied preset: {:?}", preset);
+        info!(?preset, "applied preset");
     }
     
     info!(
@@ -145,7 +147,7 @@ fn main() -> anyhow::Result<()> {
         ustar.raw_tree(&trees.taxon_set)
     };
     if let Some(out) = args.output {
-        fs::write(out, tree).unwrap();
+        fs::write(out, tree)?;
     } else {
         println!("{}", tree);
     }

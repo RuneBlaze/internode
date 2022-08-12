@@ -3,7 +3,6 @@ use ndarray::{Array, Ix2, ShapeBuilder};
 use ordered_float::NotNan;
 use std::{cmp::Reverse, collections::BinaryHeap};
 use tracing::warn;
-
 use crate::tree::Tree;
 
 type MinNotNan = Reverse<NotNan<f64>>;

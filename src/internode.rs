@@ -7,7 +7,6 @@ use crate::tree::*;
 use ndarray::prelude::*;
 use ndarray::Array;
 use rayon::prelude::*;
-use std::borrow::Borrow;
 use std::cell::RefCell;
 use std::ffi::CString;
 use std::mem::size_of;
@@ -463,9 +462,7 @@ pub fn translate_newick(taxon_set: &TaxonSet, newick: &str) -> String {
 
 #[cfg(test)]
 pub mod tests {
-
     use std::path::PathBuf;
-
     pub fn avian_tree() -> PathBuf {
         let mut d = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
         d.push("resources/test");
