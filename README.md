@@ -1,7 +1,7 @@
 Internode
 ==================
 
-[![shields.io](https://img.shields.io/badge/recommended_version-0.0.7_snapshot-blue?style=for-the-badge)](https://github.com/RuneBlaze/internode/releases/tag/v0.0.7-snapshot)
+[![shields.io](https://img.shields.io/badge/recommended_version-0.0.7_snapshot-blue?style=for-the-badge)](https://github.com/RuneBlaze/internode/releases/tag/v0.0.7-snapshot) [![shields.io](https://img.shields.io/badge/research_paper-biorxiv_preprint-blue?style=for-the-badge)](https://www.biorxiv.org/content/10.1101/2022.05.24.493312v1)
 
 Very fast and accurate species tree inference despite [ILS](https://en.wikipedia.org/wiki/Incomplete_lineage_sorting). Somewhat a successor to [ASTRID-2](https://github.com/pranjalv123/ASTRID) and a competitor to [ASTER](https://github.com/chaoszhang/ASTER).
 
