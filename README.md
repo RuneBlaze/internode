@@ -24,7 +24,7 @@ In addition, weighted ASTRID (by support) means that the gene trees can be annot
 Say, you have prepared this `genes.tre` file containing all your gene trees separated by newlines. Now we have two differing scenarios:
 
  1. The gene trees have been annotated by support values that you trust (e.g., bootstrap support, [aBayes](https://academic.oup.com/sysbio/article/60/5/685/1644562?login=false) support). Moreover, you know the upper-bound and lower-bound of these support. Continuing with our example data of S100 mentioned above, the lower bound is 0 and the upper bound is 100.
- 2. The gene trees don't have support you trust
+ 2. The gene trees don't have support you trust.
 
 In the first scenario, the command goes something like this:
 
@@ -32,20 +32,21 @@ In the first scenario, the command goes something like this:
 wastrid -i genes.tre -b 0-100 -o output_stree.tre
 ```
 
-where `output_stree.tre` is the output species tree path, `-b` specified our bounds for the support (lower bound 0, upper bound 100). For example, for aBayes support that can have lower bound 0.333 and upper bound 1, the bounds can be spcified as `-b 0.333-1`.
+where `output_stree.tre` is the output species tree path, `-b` specified our bounds for the support (lower bound 0, upper bound 100). For example, for aBayes support that can have lower bound 0.333 and upper bound 1, the bounds can be specified as `-b 0.333-1`.
 
-In the second secnario, you really just want to run ASTRID (not weighted ASTRID), in which case just do
+In the second scenario (you don't have support/you don't trust the accuracy of such support), you really just want to run ASTRID (not weighted ASTRID), in which case just do
 
 ```shell
 wastrid -i genes.tre --preset vanilla -o output_stree.tre
 ```
 
-where `preset` can preconfigure flags for you, other presets include:
+where `preset` can preconfigure flags for you. Other presets include:
 
  - `--preset abayes`, equivalent to `-b 0.333-1`
  - `--preset hundred-bootstrap`, equivalent to `-b 0-100`
 
-At which point the output species tree topology is at `output_stree.tre`. The branch lengths of the species tree are not meaningful.
+At which point the output species tree topology is at `output_stree.tre`. The branch lengths of the species tree are not meaningful,
+and only the branch support are truly useful.
 
 ## Examples
 
@@ -83,10 +84,10 @@ RUSTFLAGS="-C target-cpu=native" cargo build --release
 
 ## Notes
  - This implementation of ASTRID is faster than the original implementation (of ASTRID-2). That is, `wastrid --preset vanilla` is speed-wise a better ASTRID.
- - Missing data imputation is implemented (and automatically turned on), but alpha quality, using the original procudure of ASTRID.
+ - Missing data imputation is implemented (and automatically turned on), but alpha quality, using the original procedure of ASTRID.
  - ASTRID-multi (see also [DISCO](https://github.com/JSdoubleL/DISCO)) is still not implemented
 
-## Acknowledgements
+## Acknowledgments
 
 The code contains translated parts from [ASTRID-2](https://github.com/pranjalv123/ASTRID) and [TreeSwift](https://github.com/niemasd/TreeSwift). Due to ASTRID-2's GPLv2 and TreeSwift's GPLv3 license, this project is licensed as GPLv3.
 
