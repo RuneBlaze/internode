@@ -45,8 +45,8 @@ where `preset` can preconfigure flags for you. Other presets include:
  - `--preset abayes`, equivalent to `-b 0.333-1`
  - `--preset hundred-bootstrap`, equivalent to `-b 0-100`
 
-At which point the output species tree topology is at `output_stree.tre`. The branch lengths of the species tree are not meaningful,
-and only the branch support are truly useful.
+At which point the output species tree topology is at `output_stree.tre`. The branch lengths of the species tree are not
+biologically meaningful.
 
 ## Examples
 
