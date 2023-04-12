@@ -129,6 +129,7 @@ fn main() -> anyhow::Result<()> {
         UstarState::from_tree_collection_par(&trees, &config, args.threads)
     };
     ustar.flatten();
+    info!("finished distance matrix calculation");
     if args.only_distances {
         if let Some(out) = args.output {
             ustar.dm.write_npy(File::create(out)?)?;
